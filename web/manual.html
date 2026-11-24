@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Manuel Antonio Bayona Cely">
+<link rel="icon" type="image/svg+xml" href="/marca/icono.svg">
+<title>Manual de uso · Evaluador GD</title>
+<style>
+  :root { --bg: #f4f6f5; --panel: #fff; --ink: #0d2436; --muted: #5a6776; --line: #dde3e6; --accent: #23922f; --accent-soft: #e6f4e3; --warn: #b4531f; --warn-soft: #fbece3; --navy: #0d2436; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 56px; }
+  body { margin: 0; font: 15px/1.6 "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  header { position: sticky; top: 0; z-index: 10; height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: var(--navy); color: #fff; border-bottom: 2px solid #7cc01f; }
+  header img { height: 20px; } header b { font-size: 14px; } header .sp { flex: 1; }
+  header a, header button { color: #cfe9df; text-decoration: none; font: inherit; font-size: 13px; background: none; border: 1px solid rgba(255,255,255,.3); border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+  .marco { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 28px; padding: 22px 16px 60px; }
+  nav { position: sticky; top: 62px; align-self: start; max-height: calc(100vh - 80px); overflow: auto; font-size: 13.5px; }
+  nav input { width: 100%; font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; }
+  nav a { display: block; padding: 5px 9px; border-radius: 7px; color: var(--ink); text-decoration: none; }
+  nav a:hover { background: #e9efec; } nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  main { min-width: 0; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; }
+  h1 { font-size: 26px; margin: 0 0 4px; } h2 { font-size: 19px; margin: 0 0 10px; color: var(--navy); }
+  h3 { font-size: 15px; margin: 18px 0 6px; color: var(--accent); }
+  p { margin: 0 0 10px; max-width: 76ch; } ul, ol { margin: 0 0 10px; padding-left: 22px; max-width: 76ch; } li { margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 6px 0 12px; }
+  th { text-align: left; background: #eef2f0; padding: 7px 9px; border: 1px solid var(--line); font-weight: 600; }
+  td { padding: 7px 9px; border: 1px solid var(--line); vertical-align: top; }
+  .tabla { overflow-x: auto; }
+  kbd, .bt { display: inline-block; font: 600 12.5px "Segoe UI", sans-serif; background: #eef2f0; border: 1px solid #cfd8d3; border-radius: 6px; padding: 0 7px; white-space: nowrap; }
+  .nota { background: var(--warn-soft); color: #7a3a14; border-radius: 9px; padding: 10px 13px; margin: 8px 0 12px; max-width: 76ch; }
+  .tip { background: var(--accent-soft); color: #175c20; border-radius: 9px; padding: 10px 13px; margin: 8px 0 12px; max-width: 76ch; }
+  .pasos { counter-reset: paso; list-style: none; padding: 0; }
+  .pasos li { counter-increment: paso; position: relative; padding: 2px 0 8px 40px; }
+  .pasos li::before { content: counter(paso); position: absolute; left: 0; top: 2px; width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+  .sem { display: inline-block; padding: 0 9px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #fff; }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .oculto { display: none; }
+  @media (max-width: 860px) { .marco { grid-template-columns: 1fr; } nav { position: static; max-height: none; } section { padding: 16px; } }
+  @media print { header, nav { display: none; } .marco { display: block; padding: 0; } section { border: 0; padding: 0 0 12px; break-inside: avoid-page; } body { background: #fff; font-size: 11.5pt; } }
+</style>
+</head>
+<body>
+<header><img src="/marca/solcor_negativo.png" alt="Solcor Colombia"><b>Evaluador GD · Manual de uso</b><span class="sp"></span>
+  <button onclick="window.print()">Imprimir o guardar PDF</button><a href="/?guia=1">Guía interactiva</a><a href="/">← Volver al evaluador</a></header>
+<div class="marco">
+<nav id="indice"><input id="buscar" type="search" placeholder="Buscar en el manual…" aria-label="Buscar en el manual"></nav>
+<main>
+
+<section id="inicio">
+  <h1>Manual de uso del Evaluador GD</h1>
+  <p class="muted">Versión 2.2 · Autor y desarrollador: Manuel Antonio Bayona Cely · © 2026</p>
+  <p>El Evaluador GD responde en minutos la pregunta que antes tomaba días: <b>¿este predio sirve para un proyecto solar de generación distribuida, cuánto cabe, qué lo restringe, dónde se conecta y cómo da el negocio?</b></p>
+  <p>Con un predio en el mapa, la herramienta arma el layout de mesas, lo reparte en bloques GD, cruza el terreno con las capas ambientales, sociales y de infraestructura, ubica la red eléctrica más cercana, corre el modelo financiero y genera los entregables del proyecto.</p>
+  <div class="tip"><b>Si es tu primera vez:</b> abre la <a href="/?guia=1">guía interactiva</a>. Te lleva paso a paso por la pantalla en dos minutos.</div>
+  <h3>El recorrido completo en cinco pasos</h3>
+  <ol class="pasos">
+    <li><b>Ubica el predio.</b> Con un KMZ, una coordenada, el predio del catastro o tu ubicación en campo.</li>
+    <li><b>Evalúa.</b> La herramienta calcula el layout y los resultados aparecen bajo el mapa.</li>
+    <li><b>Revisa.</b> Capacidad, restricciones, conexión y cifras del negocio.</li>
+    <li><b>Guarda</b> la evaluación y, si aplica, regístrala como <b>lead</b>.</li>
+    <li><b>Genera los entregables</b> y, cuando el lead avance, pásalo a <b>proyecto E1</b>.</li>
+  </ol>
+</section>
+
+<section id="ingreso">
+  <h2>1. Ingreso y cuentas</h2>
+  <ul>
+    <li>Se entra con correo y contraseña. El administrador crea cada usuario y el sistema envía un enlace para definir la contraseña.</li>
+    <li>La contraseña debe tener al menos 10 caracteres, con letras y números.</li>
+    <li>Si la olvidas, usa <span class="bt">¿Olvidaste tu contraseña?</span> en la pantalla de ingreso. Llega un enlace que vence en 60 minutos.</li>
+    <li>Tras 5 intentos fallidos, el ingreso se bloquea 15 minutos.</li>
+    <li>La sesión dura 12 horas. Tu nombre aparece arriba a la derecha; desde ahí cierras sesión.</li>
+  </ul>
+</section>
+
+<section id="pantalla">
+  <h2>2. La pantalla</h2>
+  <div class="tabla"><table>
+    <tr><th>Zona</th><th>Para qué sirve</th></tr>
+    <tr><td><b>Barra superior</b></td><td>Nombre del predio en evaluación, buscador de municipios y los botones <span class="bt">＋ Nueva</span> <span class="bt">Abrir</span> <span class="bt">Guardar</span> <span class="bt">Exportar KML</span> <span class="bt">Leads</span> <span class="bt">Soporte</span>.</td></tr>
+    <tr><td><b>Panel izquierdo</b></td><td>Se recorre en cuatro pasos, con los botones de arriba del panel: <b>1 Predio</b> (ubicar el predio y capas del archivo), <b>2 Diseño</b> (elementos, mesa y módulo, capacidad), <b>3 Negocio</b> (arriendo, oferta y modelo financiero) y <b>4 Entregables</b>. Solo el primero es obligatorio; los demás traen valores de fábrica. Cada sección se pliega con un clic en su título.</td></tr>
+    <tr><td><b>Mapa</b></td><td>Imagen satelital con el predio, el layout y las capas. A la izquierda: zoom, panel «Capas GIS Solcor», regla de medir y los botones de Google Earth.</td></tr>
+    <tr><td><b>Resultados</b></td><td>Franja bajo el mapa, organizada en pestañas (resumen, elementos, agua, restricciones, predios, financiero). Se recoge, se deja normal o se extiende con sus tres botones, o arrastrando su barra.</td></tr>
+  </table></div>
+  <p>En celular el mapa ocupa la pantalla y el panel izquierdo se abre con el botón <span class="bt">☰</span>.</p>
+</section>
+
+<section id="predio">
+  <h2>3. Ubicar el predio</h2>
+  <p>Todo empieza en la sección <b>1 · Predio</b>. Hay cinco formas; usa la que tengas a mano.</p>
+  <div class="tabla"><table>
+    <tr><th>Forma</th><th>Cómo</th><th>Cuándo conviene</th></tr>
+    <tr><td><b>Archivo KMZ o KML</b></td><td>Arrástralo a la zona punteada o haz clic para buscarlo.</td><td>Ya tienes el predio dibujado en Google Earth.</td></tr>
+    <tr><td><b>Coordenada</b></td><td>Pestaña «Coordenada y dibujo»: escribe la coordenada y pulsa <span class="bt">Ir</span>.</td><td>Te dieron un punto. Acepta grados decimales, grados-minutos-segundos y CTM12.</td></tr>
+    <tr><td><b>Predio catastral</b></td><td><span class="bt">▦ Usar predio catastral</span> y luego un clic sobre el predio en el mapa.</td><td>Quieres el lindero oficial del IGAC.</td></tr>
+    <tr><td><b>Dibujo</b></td><td><span class="bt">✎ Dibujar polígono</span>: un clic por vértice; doble clic o <span class="bt">✓ Terminar</span> para cerrar.</td><td>Solo te interesa una parte del predio.</td></tr>
+    <tr><td><b>En campo</b></td><td><span class="bt">◎ Estoy aquí</span> usa el GPS del celular; <span class="bt">▣ Desde una foto</span> lee la coordenada guardada en la foto.</td><td>Estás parado en el predio.</td></tr>
+  </table></div>
+  <div class="nota"><b>Foto en iPhone:</b> al elegir la foto, toca «Opciones» y deja activa «Ubicación». Si no, la foto llega sin coordenada.</div>
+  <h3>Capas del archivo y sus roles</h3>
+  <p>Al cargar un KMZ, la herramienta lee sus capas y le asigna a cada una un rol: <b>construible</b> (donde van mesas), <b>exclusión</b> (donde no) o <b>mesa existente</b>. Si alguna quedó mal, cámbiala en la sección <b>7 · Capas del archivo</b>.</p>
+</section>
+
+<section id="capas">
+  <h2>4. Capas del mapa y red eléctrica</h2>
+  <p>El panel <b>Capas GIS Solcor</b>, sobre el mapa, agrupa la información de contexto. Cada grupo tiene una casilla que enciende o apaga todas sus capas.</p>
+  <div class="tabla"><table>
+    <tr><th>Grupo</th><th>Qué contiene</th></tr>
+    <tr><td>Oportunidad</td><td>Zonas aptas para GD identificadas por Solcor.</td></tr>
+    <tr><td>Conexión</td><td>Red eléctrica por operador: ENEL, EBSA, ESSA, CENS, EPM, EDEQ, Celsia, ENERCA y EMSA. Se despliega por tipo de red y por circuito.</td></tr>
+    <tr><td>Hidrografía</td><td>Ríos, quebradas, lagunas y demás cuerpos de agua del IGAC a escala 1:100.000.</td></tr>
+    <tr><td>Ambiental</td><td>Parques Nacionales, RUNAP, áreas protegidas de las CAR, prioridades de conservación y ecosistemas.</td></tr>
+    <tr><td>Social</td><td>Resguardos, consejos comunitarios y zonas de reserva campesina (ANT).</td></tr>
+    <tr><td>Arqueología</td><td>Áreas protegidas, planes de manejo, sitios y hallazgos del ICANH.</td></tr>
+    <tr><td>Superposición</td><td>Títulos mineros, proyectos con licencia ambiental y tierras, pozos y sísmica de hidrocarburos.</td></tr>
+    <tr><td>Catastro IGAC</td><td>Predios rurales y urbanos, veredas y construcciones.</td></tr>
+    <tr><td>Referencia</td><td>Municipios. Al encenderla aparecen los nombres de las capitales.</td></tr>
+  </table></div>
+  <ul>
+    <li>Cada capa se carga solo en la zona visible y desde cierto zoom. Si dice «acerca N niveles», acércate.</li>
+    <li>Un clic sobre cualquier elemento muestra sus atributos.</li>
+    <li><b>Recurso solar · PVOUT Solargis</b>, al final del panel, pinta el mapa de calor de producción solar.</li>
+    <li>El deslizador «Opacidad» aclara todas las capas a la vez.</li>
+  </ul>
+  <div class="nota"><b>Cobertura de la red:</b> no todos los operadores publican sus redes. Si la zona no tiene red en el mapa, puede ser que la base no la cubra, no que no exista. Confirma siempre con el operador.</div>
+</section>
+
+<section id="evaluar">
+  <h2>5. Evaluar y leer los resultados</h2>
+  <p>Al cargar o dibujar el predio, la evaluación corre sola. Cada vez que cambias un parámetro se recalcula. El botón <span class="bt">Evaluar predio</span>, al final del panel, la vuelve a lanzar.</p>
+  <h3>Lo que muestran los resultados</h3>
+  <div class="tabla"><table>
+    <tr><th>Bloque</th><th>Qué dice</th></tr>
+    <tr><td><b>Indicadores</b></td><td>Capacidad DC y AC, mesas y módulos, energía del primer año, área construible y oferta de arriendo.</td></tr>
+    <tr><td><b>Por área construible</b></td><td>Hectáreas, mesas y potencia de cada área.</td></tr>
+    <tr><td><b>Reparto en bloques GD</b></td><td>Cada GD con sus mesas, potencia DC, potencia AC y relación DC/AC.</td></tr>
+    <tr><td><b>Elementos y cantidades</b></td><td>Lo que ubicaste en el mapa: conexión, cuarto eléctrico, líneas, vías.</td></tr>
+    <tr><td><b>Rondas hídricas</b></td><td>Cuerpos de agua cercanos y la franja que se descontó del área útil.</td></tr>
+    <tr><td><b>Restricciones y contexto</b></td><td>Semáforo, hallazgos por capa, recurso solar, pendiente y red eléctrica cercana.</td></tr>
+    <tr><td><b>Predios catastrales</b></td><td>Predios del IGAC que toca el área construible.</td></tr>
+    <tr><td><b>Modelo financiero</b></td><td>CAPEX, TIR, EBITDA, cobertura de deuda y flujo anual por GD.</td></tr>
+  </table></div>
+  <h3>Cómo leer el mapa</h3>
+  <ul>
+    <li><b>Cada GD tiene un color.</b> Dentro del GD, cada inversor tiene un tono: base, claro y oscuro.</li>
+    <li><b>Dos GD nunca comparten una fila</b> de mesas: el corte cae siempre al terminar una fila.</li>
+    <li>Un clic en una mesa muestra su ficha: bloque, inversor, módulos y dimensiones.</li>
+    <li>Desde zoom 17 se dibuja cada módulo.</li>
+  </ul>
+  <h3>El semáforo</h3>
+  <div class="tabla"><table>
+    <tr><th>Color</th><th>Significa</th><th>Qué hacer</th></tr>
+    <tr><td><span class="sem" style="background:#2e7d32">Sin alertas</span></td><td>El área no se cruza con capas restrictivas.</td><td>Seguir con el análisis.</td></tr>
+    <tr><td><span class="sem" style="background:#b7791f">Revisar</span></td><td>Hay cruce con una capa que no impide el proyecto pero exige validación.</td><td>Leer el hallazgo y consultar con la entidad.</td></tr>
+    <tr><td><span class="sem" style="background:#c0392b">Restricción fuerte</span></td><td>Cruce con parques, áreas protegidas o territorios étnicos.</td><td>En principio, descartar o redibujar el área.</td></tr>
+  </table></div>
+  <div class="nota">El semáforo es un filtro preliminar con información pública. No reemplaza las consultas formales ante las entidades.</div>
+</section>
+
+<section id="elementos">
+  <h2>6. Elementos del proyecto</h2>
+  <p>En la sección <b>2 · Elementos del proyecto</b> ubicas lo que acompaña a las mesas: punto de conexión, cuarto eléctrico y transformador, acceso, vías, línea de media tensión, inversores, edificaciones, árboles y servidumbres.</p>
+  <ol class="pasos">
+    <li>Elige el GD en «Asignar a». La conexión, el transformador y los inversores son propios de cada GD.</li>
+    <li>Pulsa el elemento y luego haz clic en el mapa donde va. Las líneas y polígonos se trazan con varios clics.</li>
+    <li>Los elementos marcados «excluye» dejan libre de mesas el espacio que ocupan; el layout se recalcula.</li>
+  </ol>
+  <ul>
+    <li>Puedes ubicar varios <b>accesos</b>. La <b>vía de acceso al predio</b> (desde la vía pública) y las <b>vías internas</b> se trazan por separado.</li>
+    <li><span class="bt">╍ Trazar vía interna</span> une el acceso más cercano con el cuarto eléctrico del GD activo.</li>
+    <li><span class="bt">〰 Trazar línea MT</span> une el transformador con el punto de conexión. Su longitud alimenta el cotizador.</li>
+    <li><span class="bt">⊡ Ubicar inversores</span> coloca los que faltan junto al transformador.</li>
+    <li>Al poner el punto de conexión, puedes ajustarlo a la red más cercana del mapa.</li>
+  </ul>
+</section>
+
+<section id="parametros">
+  <h2>7. Parámetros del diseño</h2>
+  <p>Los valores de fábrica sirven para una primera evaluación. Cámbialos solo cuando tengas un dato mejor.</p>
+  <div class="tabla"><table>
+    <tr><th>Sección</th><th>Qué ajustas</th></tr>
+    <tr><td><b>3 · Mesa y módulo</b></td><td>Configuración base, módulo del catálogo, orientación vertical u horizontal, filas y columnas, inclinación, pasillo y retiro al lindero.</td></tr>
+    <tr><td><b>4 · Capacidad, conexión y energía</b></td><td>Paneles deseados, máximo de GD, potencia AC por GD, potencia del inversor, relación DC/AC máxima, transformador del CT por GD y producción específica. <b>Transformador CT por GD (kVA)</b>: la capacidad del transformador de cada GD, en orden y separada por comas (p. ej. «0, 630» limita solo el GD 2 a 630 kVA; vacío o 0 = sin límite). Ese GD queda con AC = el menor entre el AC por GD y los kVA del transformador, y con un DC máximo = esa AC × DC/AC máx.; el reparto de mesas respeta el tope de cada GD.</td></tr>
+    <tr><td><b>5 · Arriendo</b></td><td>Canon por hectárea, base del arriendo y plazo.</td></tr>
+    <tr><td><b>6 · Modelo financiero</b></td><td>EPC por kWp, costo RTB por GD, operación y mantenimiento, apalancamiento, tasa y plazo de la deuda.</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Agregar un módulo:</b> en la sección 3 carga la ficha técnica en PDF. La herramienta extrae potencia, dimensiones y peso; revisa los valores antes de guardar.</li>
+    <li><b>Producción específica:</b> con «Tomar el PVOUT Solargis del sitio» activo, un predio nuevo usa el recurso solar de ese punto. Desmárcalo para escribir tu propio valor.</li>
+    <li><b>Limitar el tamaño:</b> «Paneles deseados» o «Máximo de GDs» recortan el layout a las mesas más cercanas al punto de conexión. El arriendo se ajusta en proporción.</li>
+  </ul>
+</section>
+
+<section id="guardar">
+  <h2>8. Guardar, abrir y trabajo en equipo</h2>
+  <ul>
+    <li><span class="bt">Guardar</span> conserva el predio, las capas, los parámetros, los elementos y los supuestos. Los resultados se recalculan al abrir.</li>
+    <li><span class="bt">Abrir</span> lista las evaluaciones de <b>todo el equipo</b>, con su autor.</li>
+    <li>Solo el autor o un administrador puede sobrescribir o borrar una evaluación. Si abres la de otra persona y guardas, queda <b>una copia tuya</b>.</li>
+    <li>«Guardar como nueva» conserva la versión anterior.</li>
+    <li>Junto al nombre del predio se lee el estado: «sin guardar», «cambios sin guardar» o «guardada».</li>
+  </ul>
+</section>
+
+<section id="leads">
+  <h2>9. Leads y paso a proyecto</h2>
+  <p>Un <b>lead</b> es un predio ofrecido o identificado que todavía no es proyecto. Se maneja desde el botón <span class="bt">Leads</span>.</p>
+  <ol class="pasos">
+    <li><b>Registrar.</b> «Nuevo lead»: nombre, propietario, contacto, ubicación, canal y notas. Si ya tienes la evaluación abierta, usa «＋ Crear lead con la evaluación abierta» y el formulario llega lleno.</li>
+    <li><b>Evaluar.</b> El botón «Evaluar» del lead lo carga en el mapa. Si ya tenía evaluación, la retoma.</li>
+    <li><b>Guardar.</b> La evaluación queda ligada al lead, que pasa a «Evaluado».</li>
+    <li><b>Decidir.</b> Cambia el estado a «En espera» o «Descartado», o continúa.</li>
+    <li><b>Pasar a E1.</b> Asigna el siguiente número de proyecto y crea su carpeta en SharePoint con las diez subcarpetas.</li>
+    <li><b>Exportar entregables.</b> Con la evaluación del lead abierta, guarda todos los documentos en su subcarpeta.</li>
+  </ol>
+  <div class="nota"><b>«Pasar a E1» no se deshace desde el Evaluador.</b> Crea una carpeta real en SharePoint y consume un número de proyecto. Úsalo solo cuando el lead de verdad avance.</div>
+  <p>La etiqueta amarilla junto al nombre del predio indica a qué lead pertenece la evaluación abierta.</p>
+</section>
+
+<section id="entregables">
+  <h2>10. Entregables</h2>
+  <p>Se generan en la sección <b>8 · Propietario y entregables</b>. Antes, escribe el nombre del proyecto y quién elabora y aprueba.</p>
+  <div class="tabla"><table>
+    <tr><th>Entregable</th><th>Formato</th><th>Requiere</th><th>Carpeta del proyecto</th></tr>
+    <tr><td>Ficha técnica del proyecto</td><td>Word</td><td>Predio evaluado</td><td>0 Resumen</td></tr>
+    <tr><td>Datos para el CRM</td><td>Excel</td><td>Lead en E1</td><td>0 Resumen</td></tr>
+    <tr><td>Layout</td><td>KML y KMZ</td><td>Predio evaluado</td><td>1 Predial</td></tr>
+    <tr><td>Reporte de caracterización predial</td><td>Word</td><td>Predio evaluado</td><td>1 Predial</td></tr>
+    <tr><td>Estudio de títulos preliminar</td><td>Word</td><td>CTL cargado</td><td>3 Jurídico</td></tr>
+    <tr><td>Plano del layout</td><td>DXF</td><td>Predio evaluado</td><td>5 Energía</td></tr>
+    <tr><td>Cotizador ajustado en cantidades</td><td>Excel</td><td>Predio evaluado</td><td>6 Capex</td></tr>
+    <tr><td>Modelo financiero</td><td>Excel</td><td>Predio evaluado</td><td>8 Financiera</td></tr>
+  </table></div>
+  <ul>
+    <li>Cada botón descarga el archivo. Si la evaluación es de un lead en E1, además deja copia en su carpeta.</li>
+    <li>En la carpeta los archivos se llaman <code>AAAAMMDD E1 descripción v01</code>. Una nueva exportación crea la v02; nunca pisa la anterior.</li>
+    <li><b>Cotizador:</b> parte del cotizador de referencia y cambia solo cantidades. Precios, IVA y márgenes son los de la plantilla; revísalos antes de usarlo.</li>
+    <li><b>Modelo financiero:</b> son valores calculados, sin fórmulas. Sirve para revisar; no reemplaza el modelo del proyecto.</li>
+    <li><b>Plano DXF:</b> viene en metros, en MAGNA-SIRGAS Origen Nacional, con una capa por GD.</li>
+  </ul>
+</section>
+
+<section id="ctl">
+  <h2>11. Certificado de tradición y estudio de títulos</h2>
+  <ol class="pasos">
+    <li>En el paso 1 · Predio, arrastra el <b>CTL</b> en PDF, tal como lo expide la Superintendencia de Notariado y Registro. Si el folio trae el número predial y el predio está en el catastro IGAC, puedes verlo en el mapa y evaluarlo con un clic; ahí mismo aparece el resumen: titulares y cuotas, área del folio frente a la catastral y riesgos altos. El Word del estudio de títulos se genera en la sección 8.</li>
+    <li>La herramienta lee el folio: titulares y cuotas, cadena de anotaciones, gravámenes, medidas cautelares y riesgos.</li>
+    <li>Con el número predial ubica el predio en el catastro. Usa <span class="bt">⌖ Ver en el mapa</span> o <span class="bt">▦ Evaluar este predio</span>.</li>
+    <li>Escribe el nombre y la cédula de quien ofrece el predio: el estudio verifica si figura como titular.</li>
+    <li>Genera el <b>Estudio de títulos preliminar</b>.</li>
+  </ol>
+  <div class="nota">Es un análisis preliminar automático. No es un concepto jurídico: debe validarlo un abogado antes de cualquier trámite.</div>
+</section>
+
+<section id="herramientas">
+  <h2>12. Herramientas del mapa</h2>
+  <div class="tabla"><table>
+    <tr><th>Botón</th><th>Qué hace</th></tr>
+    <tr><td>📏 Medir</td><td>Clic para agregar puntos, doble clic o <b>✓ Terminar</b> para cerrar, <kbd>Esc</kbd> para borrar. <b>💾 Guardar medida</b> la deja en la evaluación como referencia: sus vértices atraen los clics al trazar polígonos, elementos o nuevas medidas.</td></tr>
+    <tr><td>🌍 Google Earth</td><td>Descarga un KML con la vista actual y el contorno del predio; al abrirlo se lanza Google Earth de escritorio.</td></tr>
+    <tr><td>🌐 Earth web</td><td>Abre la misma vista en Google Earth web.</td></tr>
+    <tr><td>🚶 Street View</td><td>Abre Street View en el centro del mapa.</td></tr>
+    <tr><td>Capas base</td><td>Arriba a la derecha: satélite, satélite con nombres, calles y relieve.</td></tr>
+    <tr><td>Buscador</td><td>En la barra superior: escribe un municipio o departamento para ir a él, o una vereda, el nombre o la dirección de un predio, o su número predial (catastro público IGAC; si agregas el municipio, por ejemplo «la esperanza paipa», busca solo en él). Al elegir un predio se ubica en el mapa y su ficha tiene «Usar este predio».</td></tr>
+  </table></div>
+</section>
+
+<section id="celular">
+  <h2>13. Uso en celular</h2>
+  <ul>
+    <li>La barra superior se organiza en dos renglones y el panel de datos se abre con <span class="bt">☰</span>.</li>
+    <li>El panel de capas y los resultados arrancan recogidos para dejar ver el mapa.</li>
+    <li>Para una visita de campo: <span class="bt">Leads</span> → «Nuevo lead» → <span class="bt">◎ Aquí</span>, completa los datos del propietario y guarda. La evaluación detallada se hace después en el computador.</li>
+    <li>La ubicación del dispositivo solo funciona con conexión segura (dirección que empieza por <code>https</code>).</li>
+  </ul>
+</section>
+
+<section id="soporte">
+  <h2>14. Soporte y mejoras</h2>
+  <p>El botón <span class="bt">Soporte</span> registra errores, ajustes, ideas y dudas. Se atienden en un barrido diario.</p>
+  <ul>
+    <li>Elige el tipo, escribe un título y describe qué hacías, qué esperabas y qué pasó.</li>
+    <li>Adjunta capturas con <kbd>Ctrl</kbd>+<kbd>V</kbd>, arrastrando o buscando. Acepta también PDF, KMZ, Word y Excel.</li>
+    <li>La herramienta agrega sola el contexto: evaluación abierta, municipio, posición del mapa y el último error.</li>
+    <li>La respuesta aparece en «Mis tickets». El botón muestra un contador cuando hay respuestas sin leer.</li>
+    <li>Cada ticket es una conversación: puedes responder o agregar comentarios debajo de la respuesta mientras el ticket siga abierto. La conversación se cierra cuando el administrador lo marca como «Resuelto» o «Descartado»; si el tema sigue pendiente, abre un ticket nuevo.</li>
+  </ul>
+</section>
+
+<section id="problemas">
+  <h2>15. Problemas frecuentes</h2>
+  <div class="tabla"><table>
+    <tr><th>Qué ves</th><th>Causa probable</th><th>Qué hacer</th></tr>
+    <tr><td>El predio no tiene mesas.</td><td>Ninguna capa quedó como «construible», o el retiro y las rondas se comieron el área.</td><td>Revisa los roles en la sección 7 y el retiro en la sección 3.</td></tr>
+    <tr><td>Una capa no aparece.</td><td>Falta zoom.</td><td>Acércate hasta el nivel que indica la capa.</td></tr>
+    <tr><td>No hay red eléctrica cerca.</td><td>La base no cubre a ese operador o esa zona.</td><td>Confirma con el operador de red.</td></tr>
+    <tr><td>«Sesión vencida».</td><td>Pasaron 12 horas o cambiaste la contraseña.</td><td>Ingresa de nuevo. Guarda con frecuencia.</td></tr>
+    <tr><td>El CTL no se lee.</td><td>Es un PDF escaneado como imagen.</td><td>Usa el PDF original de la SNR.</td></tr>
+    <tr><td>«Pasar a E1» está deshabilitado.</td><td>El equipo que corre el Evaluador no encuentra la carpeta «Desarrollo GD».</td><td>Pide al administrador que configure su ruta.</td></tr>
+    <tr><td>La foto «no trae coordenada».</td><td>El teléfono quitó la ubicación al compartirla.</td><td>En iPhone: «Opciones» → «Ubicación». O usa «Estoy aquí».</td></tr>
+    <tr><td>Aparece un error con un nombre de archivo y un número.</td><td>Falla interna.</td><td>Repórtalo en Soporte; el detalle se adjunta solo.</td></tr>
+  </table></div>
+</section>
+
+<section id="glosario">
+  <h2>16. Glosario</h2>
+  <div class="tabla"><table>
+    <tr><th>Término</th><th>Significado</th></tr>
+    <tr><td>GD</td><td>Generación distribuida: planta de hasta 1 MW de potencia AC conectada a la red de distribución.</td></tr>
+    <tr><td>Bloque GD</td><td>Cada planta independiente dentro de un predio, con su propio punto de conexión.</td></tr>
+    <tr><td>Mesa</td><td>Estructura que sostiene un grupo de módulos, por ejemplo 2 filas por 14 columnas.</td></tr>
+    <tr><td>kWp / MWp</td><td>Potencia pico de los módulos (corriente continua, DC).</td></tr>
+    <tr><td>Relación DC/AC</td><td>Potencia de los módulos dividida entre la de los inversores.</td></tr>
+    <tr><td>PVOUT</td><td>Energía que produce cada kWp instalado en un año, según Solargis.</td></tr>
+    <tr><td>Ronda hídrica</td><td>Franja de protección a cada lado de un cuerpo de agua, donde no se construye.</td></tr>
+    <tr><td>CTL</td><td>Certificado de tradición y libertad del predio.</td></tr>
+    <tr><td>CTM12</td><td>Sistema de coordenadas oficial de Colombia (MAGNA-SIRGAS Origen Nacional), en metros.</td></tr>
+    <tr><td>Lead</td><td>Predio en prospección, antes de ser proyecto.</td></tr>
+    <tr><td>E1</td><td>Primera etapa del pipeline de proyectos.</td></tr>
+    <tr><td>RTB</td><td>«Ready to build»: proyecto con permisos y estudios listos para construir.</td></tr>
+    <tr><td>EPC</td><td>Ingeniería, compras y construcción de la planta.</td></tr>
+    <tr><td>TIR</td><td>Tasa interna de retorno.</td></tr>
+    <tr><td>OR</td><td>Operador de red.</td></tr>
+  </table></div>
+  <p class="muted">© 2026 Manuel Antonio Bayona Cely. Todos los derechos reservados.</p>
+</section>
+
+</main>
+</div>
+<script>
+const nav = document.getElementById("indice"), secciones = [...document.querySelectorAll("main section")];
+secciones.forEach(s => { const a = document.createElement("a"); a.href = "#" + s.id; a.textContent = (s.querySelector("h2") || s.querySelector("h1")).textContent; nav.appendChild(a); });
+const enlaces = [...nav.querySelectorAll("a")];
+// resalta en el índice la sección que se está leyendo
+const visor = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) enlaces.forEach(a => a.classList.toggle("on", a.hash === "#" + e.target.id)); }),
+  { rootMargin: "-20% 0px -70% 0px" });
+secciones.forEach(s => visor.observe(s));
+const plano = t => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+document.getElementById("buscar").oninput = e => {
+  const q = plano(e.target.value.trim());
+  secciones.forEach((s, i) => { const ok = !q || plano(s.textContent).includes(q); s.classList.toggle("oculto", !ok); enlaces[i].classList.toggle("oculto", !ok); });
+};
+</script>
+</body>
+</html>

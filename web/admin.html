@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/marca/icono.svg">
+<title>Administración · Evaluador GD</title>
+<style>
+  :root { --bg: #f4f6f5; --panel: #fff; --ink: #0d2436; --muted: #5a6776; --line: #dde3e6; --accent: #23922f; --accent-soft: #e6f4e3; --warn: #b4531f; --warn-soft: #fbece3; --err: #b42318; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 13.5px/1.45 "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  header { height: 40px; display: flex; align-items: center; gap: 14px; padding: 0 16px; background: #0d2436; color: #fff; border-bottom: 2px solid #7cc01f; }
+  header img { height: 20px; }
+  header b { font-size: 14px; } header .sp { flex: 1; } header a { color: #cfe9df; text-decoration: none; font-size: 12.5px; }
+  main { max-width: 1200px; margin: 0 auto; padding: 18px 16px 40px; display: grid; gap: 18px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 0 0 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); padding: 6px; white-space: nowrap; }
+  td { padding: 6px; border-bottom: 1px solid #eef2f0; vertical-align: top; }
+  input, select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+  button.pri { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  .fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  .fila label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .t-admin { background: #e0e7ff; color: #3730a3; } .t-usuario { background: #eef2f0; color: var(--muted); }
+  .t-on { background: var(--accent-soft); color: var(--accent); } .t-off { background: #f3f4f6; color: #9ca3af; }
+  .ev-ingreso { color: var(--accent); } .ev-ingreso_fallido, .ev-ingreso_bloqueado, .ev-correo_fallido { color: var(--err); }
+  .nota { padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; margin-bottom: 10px; }
+  .ok { padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; margin-top: 8px; word-break: break-all; }
+  code { font-size: 11.5px; background: #f3f5f4; padding: 1px 4px; border-radius: 4px; word-break: break-all; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .kpi { background: var(--bg); border-radius: 10px; padding: 8px 10px; } .kpi b { font-size: 18px; display: block; } .kpi small { color: var(--muted); }
+  .scroll { max-height: 460px; overflow: auto; }
+  small.m { color: var(--muted); }
+  .cat td { background: var(--bg); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+  .t-auto { background: var(--accent-soft); color: var(--accent); } .t-chrome { background: #e0f2fe; color: #0369a1; } .t-manual { background: #f3f4f6; color: var(--muted); }
+  .t-ok { color: var(--accent); } .t-err { color: var(--err); }
+  .viejo { color: var(--warn); font-weight: 600; }
+  td a { color: #0369a1; word-break: break-all; }
+  .ed { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 6px; }
+  .ed input { width: 100%; }
+  pre.log { background: #0d2436; color: #d6e4ea; font-size: 11.5px; padding: 8px 10px; border-radius: 8px; max-height: 220px; overflow: auto; white-space: pre-wrap; margin: 8px 0 0; }
+  @media (max-width: 700px) { .ed { grid-template-columns: 1fr; } }
+  .acceso { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .acceso label { display: flex; align-items: center; gap: 4px; } .acceso select { padding: 3px 6px; font-size: 12px; }
+  .punto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; } .chip { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; font-size: 12px; }
+  td.n, th.n { text-align: right; }
+</style>
+</head>
+<body>
+<header><img src="/marca/solcor_negativo.png" alt="Solcor Colombia"><b>Evaluador GD · Administración</b><span class="sp"></span><span id="yo"></span><a href="/">← Volver al evaluador</a></header>
+<main>
+  <section id="secUsuarios">
+    <h2>Usuarios</h2>
+    <div id="avisoCorreo"></div>
+    <form class="fila" id="fNuevo">
+      <label>Nombre<input id="nNombre" required></label>
+      <label>Correo<input id="nCorreo" type="email" required></label>
+      <label>Rol<select id="nRol"><option value="usuario">Usuario</option><option value="admin">Administrador</option></select></label>
+      <button class="pri" type="submit">Invitar usuario</button>
+    </form>
+    <div id="nMsg"></div>
+    <div class="scroll" style="margin-top:12px"><table id="tUsuarios"></table></div>
+  </section>
+
+  <section id="secActividad">
+    <h2>Actividad del equipo</h2>
+    <div id="enLinea"></div>
+    <div class="scroll" style="margin-top:10px"><table id="tActividad"></table></div>
+  </section>
+
+  <section id="secFuentes">
+    <h2>Bases de datos de la herramienta</h2>
+    <p class="m" style="margin:0 0 10px;color:var(--muted)">De dónde sale cada base, cuándo se descargó por última vez y cómo se actualiza.
+      <span class="tag t-auto">Automática</span> se descarga desde aquí;
+      <span class="tag t-chrome">Desde el visor</span> el portal pide captcha o sesión y se recorre en Chrome (pídelo en un ticket);
+      <span class="tag t-manual">Manual</span> es un archivo entregado o un respaldo.</p>
+    <div id="tarea"></div>
+    <div class="scroll" style="max-height:none"><table id="tFuentes"></table></div>
+    <h2 style="margin-top:16px">Ingresar una base</h2>
+    <form class="fila" id="fFuente">
+      <label>Nombre<input id="fuNombre" required placeholder="p. ej. Red de Electrohuila"></label>
+      <label>Categoría<select id="fuCat"></select></label>
+      <label>Entidad<input id="fuEnt" placeholder="quién la publica"></label>
+      <label style="flex:1;min-width:220px">Enlace de acceso<input id="fuEnlace" type="url" placeholder="https://…"></label>
+      <label style="flex:1;min-width:220px">Notas<input id="fuNotas" placeholder="cómo se consigue, contacto, formato…"></label>
+      <button class="pri" type="submit">Ingresar</button>
+    </form>
+    <div id="fuMsg"></div>
+  </section>
+
+  <section id="secHistorial">
+    <h2>Historial de ingresos</h2>
+    <div class="kpis" id="kpis"></div>
+    <form class="fila" id="fFiltro">
+      <label>Correo contiene<input id="fCorreo" placeholder="todos"></label>
+      <label>Desde<input id="fDesde" type="date"></label>
+      <label>Hasta<input id="fHasta" type="date"></label>
+      <label>Evento<select id="fEvento"><option value="">Todos</option><option value="ingreso">Ingreso</option>
+        <option value="ingreso_fallido">Ingreso fallido</option><option value="ingreso_bloqueado">Bloqueado</option>
+        <option value="salida">Salida</option><option value="recuperacion_solicitada">Recuperación solicitada</option>
+        <option value="clave_restablecida">Contraseña restablecida</option><option value="clave_definida">Contraseña definida</option>
+        <option value="usuario_creado">Usuario creado</option><option value="usuario_modificado">Usuario modificado</option></select></label>
+      <button class="pri" type="submit">Filtrar</button>
+      <button type="button" id="bCsv">Exportar CSV</button>
+    </form>
+    <div class="scroll" style="margin-top:10px"><table id="tAccesos"></table></div>
+  </section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const EVENTOS = { ingreso: "Ingreso", ingreso_fallido: "Ingreso fallido", ingreso_bloqueado: "Bloqueado por intentos", salida: "Salida",
+  recuperacion_solicitada: "Pidió recuperar contraseña", recuperacion_enviada: "Enlace de recuperación enviado",
+  recuperacion_pendiente_envio: "Enlace de recuperación (sin correo)", invitacion_enviada: "Invitación enviada",
+  invitacion_pendiente_envio: "Invitación (sin correo)", clave_restablecida: "Contraseña restablecida", clave_definida: "Contraseña definida",
+  usuario_creado: "Usuario creado", usuario_modificado: "Usuario modificado", admin_creado: "Administrador creado",
+  enlace_generado_admin: "Enlace generado por admin", correo_fallido: "Fallo al enviar correo", correo_prueba: "Correo de prueba" };
+let ultimo = [];
+async function api(url, body) {
+  const r = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401) location.href = "/login";
+  if (!r.ok) throw new Error(j.error || "Error");
+  return j;
+}
+function enlaceHTML(e) {
+  return `<div class="ok">Enlace (${e.tipo === "invitacion" ? "invitación, vence en 7 días" : "recuperación, vence en 60 min"}) — cópialo y envíaselo:<br><code>${esc(e.enlace)}</code>
+    <button type="button" data-copiar="${esc(e.enlace)}" style="margin-left:6px">Copiar</button></div>`;
+}
+async function cargarUsuarios() {
+  const j = await api("/api/admin/usuarios");
+  const ce = j.correo_estado || {};
+  $("avisoCorreo").innerHTML = (j.correo
+    ? `<div class="ok" style="margin:0 0 10px">Correo de salida listo: ${esc(ce.usuario)} (${esc(ce.servidor)}).`
+    : `<div class="nota">Correo de salida incompleto: ${!ce.archivo ? "falta <code>datos/config_correo.json</code>" : `cuenta ${esc(ce.usuario)} configurada, pero falta la contraseña de aplicación (variable <code>EVALUADOR_SMTP_CLAVE</code>)`}.
+      Mientras tanto, copia el enlace que aparece junto a cada usuario y envíaselo tú.`)
+    + ` <button type="button" id="bPruebaCorreo" style="margin-left:6px">Enviar correo de prueba</button> <span id="pruebaMsg"></span></div>`
+    + (j.url_fija ? `<div class="ok" style="margin:0 0 10px">Los enlaces de invitación y recuperación usan la dirección fija <code>${esc(j.url_base)}</code>.</div>`
+      : `<div class="nota">Los enlaces de invitación y recuperación usan la dirección vigente <code>${esc(j.url_base)}</code>.
+        ${/trycloudflare/.test(j.url_base) ? "Es un túnel temporal: si cambia, los enlaces ya enviados dejan de abrir. Usa «Enlace para contraseña» para enviar uno nuevo; los enlaces pendientes de esta tabla ya muestran la dirección vigente." : ""}</div>`);
+  $("bPruebaCorreo").onclick = async () => {
+    $("pruebaMsg").textContent = "enviando…";
+    try { const r = await api("/api/admin/correo_prueba", {}); $("pruebaMsg").textContent = r.mensaje; cargarAccesos(); }
+    catch (e) { $("pruebaMsg").textContent = e.message; }
+  };
+  $("tUsuarios").innerHTML = `<tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th>Creado</th><th>Acciones</th></tr>` +
+    j.usuarios.map(u => `<tr>
+      <td>${esc(u.nombre)}</td><td>${esc(u.correo)}</td>
+      <td><span class="tag t-${u.rol}">${u.rol === "admin" ? "Administrador" : "Usuario"}</span></td>
+      <td><span class="tag ${u.activo ? "t-on" : "t-off"}">${u.activo ? (u.con_clave ? "Activo" : "Invitado") : "Inactivo"}</span></td>
+      <td>${esc(u.ultimo_ingreso || "—")}</td><td><small class="m">${esc(u.creado)}</small></td>
+      <td><button data-acc="activo" data-id="${u.id}" data-v="${u.activo ? 0 : 1}">${u.activo ? "Desactivar" : "Activar"}</button>
+        <button data-acc="rol" data-id="${u.id}" data-v="${u.rol === "admin" ? "usuario" : "admin"}">${u.rol === "admin" ? "Quitar admin" : "Hacer admin"}</button>
+        <button data-acc="enlace" data-id="${u.id}">Enlace para contraseña</button>
+        ${u.rol === "admin" ? "" : `<button data-acc="correo_proyectos" data-id="${u.id}" data-v="${u.correo_proyectos ? 0 : 1}"
+          title="Recibe el correo de cada proyecto nuevo en E1 (los administradores y el responsable del lead siempre lo reciben)">${u.correo_proyectos ? "✓ Recibe correo de proyectos" : "Recibir correo de proyectos"}</button>
+          <div class="acceso">
+            <label title="Qué leads, proyectos y evaluaciones ve este usuario">Ve
+              <select data-alcance="${u.id}"><option value="todos" ${u.alcance !== "propios" ? "selected" : ""}>todos los leads y proyectos</option>
+                <option value="propios" ${u.alcance === "propios" ? "selected" : ""}>solo sus leads y proyectos</option></select></label>
+            <label title="Puede abrir la lista de bases de datos y geoportales (Administración → Bases de datos)">
+              <input type="checkbox" data-permiso="fuentes_ver" data-id="${u.id}" ${u.permisos.includes("fuentes_ver") ? "checked" : ""}> ver bases de datos</label>
+            <label title="Puede lanzar «Actualizar ahora» en las bases automáticas">
+              <input type="checkbox" data-permiso="fuentes_actualizar" data-id="${u.id}" ${u.permisos.includes("fuentes_actualizar") ? "checked" : ""}> actualizarlas</label>
+          </div>`}
+        ${u.enlace_pendiente ? enlaceHTML(u.enlace_pendiente) : ""}</td></tr>`).join("");
+}
+async function cargarAccesos() {
+  const p = new URLSearchParams({ correo: $("fCorreo").value, desde: $("fDesde").value, hasta: $("fHasta").value, evento: $("fEvento").value });
+  [...p.keys()].forEach(k => !p.get(k) && p.delete(k));
+  const j = await api("/api/admin/accesos?" + p);
+  ultimo = j.accesos;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const ing = j.accesos.filter(a => a.evento === "ingreso");
+  $("kpis").innerHTML = `
+    <div class="kpi"><b>${j.resumen.filter(r => r.ingresos).length}</b><small>usuarios que han ingresado</small></div>
+    <div class="kpi"><b>${ing.filter(a => a.fecha.startsWith(hoy)).length}</b><small>ingresos hoy</small></div>
+    <div class="kpi"><b>${j.resumen.reduce((a, r) => a + r.ingresos, 0)}</b><small>ingresos totales</small></div>
+    <div class="kpi"><b>${j.resumen.reduce((a, r) => a + r.fallidos, 0)}</b><small>intentos fallidos</small></div>`;
+  $("tAccesos").innerHTML = `<tr><th>Fecha y hora</th><th>Correo</th><th>Evento</th><th>IP</th><th>Navegador</th><th>Detalle</th></tr>` +
+    (j.accesos.length ? j.accesos.map(a => `<tr><td>${esc(a.fecha)}</td><td>${esc(a.correo)}</td>
+      <td class="ev-${a.evento}">${esc(EVENTOS[a.evento] || a.evento)}</td><td>${esc(a.ip)}</td>
+      <td><small class="m">${esc(navegador(a.agente))}</small></td><td><small class="m">${esc(a.detalle)}</small></td></tr>`).join("")
+      : `<tr><td colspan="6"><small class="m">Sin registros con esos filtros.</small></td></tr>`);
+}
+function navegador(ua) {
+  if (!ua) return "";
+  const n = /Edg\//.test(ua) ? "Edge" : /Chrome\//.test(ua) ? "Chrome" : /Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "Otro";
+  const so = /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
+  return `${n}${so ? " · " + so : ""}`;
+}
+$("fNuevo").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    const j = await api("/api/admin/usuarios", { nombre: $("nNombre").value, correo: $("nCorreo").value, rol: $("nRol").value });
+    $("nMsg").innerHTML = j.enviado ? `<div class="ok">Invitación enviada a ${esc($("nCorreo").value)}.</div>` : enlaceHTML({ tipo: "invitacion", enlace: j.enlace });
+    $("fNuevo").reset(); cargarUsuarios(); cargarAccesos();
+  } catch (err) { $("nMsg").innerHTML = `<div class="nota">${esc(err.message)}</div>`; }
+};
+document.addEventListener("click", async e => {
+  const c = e.target.closest("[data-copiar]");
+  if (c) { try { await navigator.clipboard.writeText(c.dataset.copiar); c.textContent = "Copiado"; } catch (_) { c.textContent = "Selecciónalo y copia"; } return; }
+  const b = e.target.closest("[data-acc]"); if (!b) return;
+  try {
+    if (b.dataset.acc === "enlace") {
+      const j = await api("/api/admin/usuario", { id: +b.dataset.id, accion: "enlace" });
+      if (j.enviado) alert("Enlace enviado por correo.");
+    } else {
+      const v = b.dataset.acc === "activo" || b.dataset.acc === "correo_proyectos" ? +b.dataset.v : b.dataset.v;
+      await api("/api/admin/usuario", { id: +b.dataset.id, cambios: { [b.dataset.acc]: v } });
+    }
+    cargarUsuarios(); cargarAccesos();
+  } catch (err) { alert(err.message); }
+});
+// ---------- acceso de cada usuario: alcance y permisos (#51)
+$("tUsuarios").addEventListener("change", async e => {
+  const s = e.target.closest("[data-alcance]"), p = e.target.closest("[data-permiso]");
+  try {
+    if (s) await api("/api/admin/usuario", { id: +s.dataset.alcance, cambios: { alcance: s.value } });
+    else if (p) {
+      const id = +p.dataset.id;
+      const marcados = [...document.querySelectorAll(`[data-permiso][data-id="${id}"]`)].filter(x => x.checked).map(x => x.dataset.permiso);
+      await api("/api/admin/usuario", { id, cambios: { permisos: marcados } });
+    } else return;
+    cargarUsuarios(); cargarAccesos(); cargarActividad();
+  } catch (err) { alert(err.message); cargarUsuarios(); }
+});
+// ---------- actividad del equipo: quién está en línea y qué ha creado cada uno (#51)
+async function cargarActividad() {
+  const j = await api("/api/admin/actividad");
+  $("enLinea").innerHTML = `<p style="margin:0 0 6px"><span class="punto"></span><b>En línea ahora</b> <small class="m">(actividad en los últimos ${j.minutos} minutos)</small></p>` +
+    (j.en_linea.length ? `<div class="chips">${j.en_linea.map(x => `<span class="chip" title="${esc(x.correo)} · última actividad ${esc(x.ultima_actividad)}">${esc(x.nombre)}</span>`).join("")}</div>`
+      : `<small class="m">Nadie en este momento.</small>`);
+  const t = k => j.usuarios.reduce((s, x) => s + (x[k] || 0), 0);
+  $("tActividad").innerHTML = `<tr><th>Usuario</th><th class="n">Evaluaciones</th><th class="n">Leads creados</th><th class="n">Proyectos (E1)</th>
+      <th class="n">Leads como responsable</th><th>Última evaluación</th><th>Último ingreso</th></tr>` +
+    j.usuarios.map(x => `<tr${x.activo ? "" : ' style="opacity:.55"'}><td>${j.en_linea.some(o => o.id === x.id) ? '<span class="punto" title="en línea"></span>' : ""}${esc(x.nombre)}<br><small class="m">${esc(x.correo)}</small></td>
+      <td class="n">${x.evaluaciones}</td><td class="n">${x.leads}</td><td class="n">${x.proyectos}</td><td class="n">${x.responsable}</td>
+      <td><small class="m">${esc(x.ultima_evaluacion || "—")}</small></td><td><small class="m">${esc(x.ultimo_ingreso || "—")}</small></td></tr>`).join("") +
+    `<tr><td><b>Total</b></td><td class="n"><b>${t("evaluaciones")}</b></td><td class="n"><b>${t("leads")}</b></td><td class="n"><b>${t("proyectos")}</b></td><td></td><td></td><td></td></tr>`;
+}
+$("fFiltro").onsubmit = e => { e.preventDefault(); cargarAccesos(); };
+$("bCsv").onclick = () => {
+  const filas = [["fecha", "correo", "evento", "ip", "navegador", "detalle"], ...ultimo.map(a => [a.fecha, a.correo, EVENTOS[a.evento] || a.evento, a.ip, navegador(a.agente), a.detalle])];
+  const csv = "﻿" + filas.map(f => f.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(";")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `historial_ingresos_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+};
+// ---------- bases de datos de la herramienta (ticket #40)
+const METODO = { auto: ["t-auto", "Automática"], chrome: ["t-chrome", "Desde el visor"], manual: ["t-manual", "Manual"] };
+let FU = null, tPoll = null, abierta = null;
+const diasDesde = f => f ? Math.floor((Date.now() - new Date(f.replace(" ", "T"))) / 864e5) : null;
+async function cargarFuentes() {
+  FU = await api("/api/admin/fuentes");
+  if (!$("fuCat").options.length) $("fuCat").innerHTML = FU.categorias.map(c => `<option>${esc(c)}</option>`).join("");
+  $("fFuente").style.display = $("fFuente").previousElementSibling.style.display = FU.puede_editar ? "" : "none";
+  const enCurso = FU.tarea && FU.tarea.estado === "en curso";
+  let html = `<tr><th>Base</th><th>Enlace de acceso</th><th>Última descarga</th><th>Tamaño</th><th>Actualización</th><th></th></tr>`;
+  FU.categorias.forEach(cat => {
+    const filas = FU.fuentes.filter(f => f.categoria === cat); if (!filas.length) return;
+    html += `<tr class="cat"><td colspan="6">${esc(cat)}</td></tr>`;
+    filas.forEach(f => {
+      const [cls, txt] = METODO[f.metodo] || METODO.manual, fecha = f.fecha || (f.ultima && f.ultima.fecha) || null, d = diasDesde(fecha);
+      const ult = f.ultima ? `<br><small class="${/^error/.test(f.ultima.resultado) ? "t-err" : "t-ok"}">${f.ultima.resultado === "ok" ? "actualizada" : esc(f.ultima.resultado)} · ${esc(f.ultima.fecha)}</small>` : "";
+      html += `<tr><td><b>${esc(f.nombre)}</b><br><small class="m">${esc(f.entidad || "")}</small>${f.notas ? `<br><small>${esc(f.notas)}</small>` : ""}</td>
+        <td>${f.enlace ? `<a href="${esc(f.enlace)}" target="_blank" rel="noopener">${esc(f.enlace)}</a>` : `<small class="m">—</small>`}</td>
+        <td>${fecha ? `<span class="${d > 90 ? "viejo" : ""}" title="${d} días">${esc(fecha)}</span>` : `<small class="m">sin datos</small>`}${ult}</td>
+        <td>${f.mb != null ? `${f.mb.toLocaleString("es-CO")} MB` : ""}</td>
+        <td><span class="tag ${cls}">${txt}</span>
+          ${f.metodo === "auto" ? (FU.puede_actualizar ? `<br><button data-fu="actualizar" data-id="${f.id}" ${enCurso ? "disabled" : ""} style="margin-top:4px">Actualizar ahora</button>` : "")
+            : FU.puede_editar ? `<br><button data-fu="marcar" data-id="${f.id}" style="margin-top:4px" title="Registra hoy como fecha de actualización">Marcar como actualizada</button>` : ""}
+          ${f.instrucciones ? `<br><small class="m">${esc(f.instrucciones)}</small>` : ""}</td>
+        <td>${FU.puede_editar ? `<button data-fu="editar" data-id="${f.id}">Editar</button>${f.propia ? ` <button data-fu="eliminar" data-id="${f.id}">Quitar</button>` : ""}` : ""}</td></tr>
+        ${abierta === f.id ? `<tr><td colspan="6"><div class="ed">
+          <label>Enlace de acceso<input id="edEnlace" value="${esc(f.enlace || "")}" placeholder="https://…"></label>
+          <label>Notas<input id="edNotas" value="${esc(f.notas || "")}"></label>
+          <div><button class="pri" data-fu="guardar" data-id="${f.id}">Guardar</button> <button data-fu="cancelar">Cancelar</button></div></div></td></tr>` : ""}`;
+    });
+  });
+  $("tFuentes").innerHTML = html;
+  pintarTarea();
+}
+function pintarTarea() {
+  const t = FU && FU.tarea;
+  $("tarea").innerHTML = !t ? "" : `<div class="${t.estado === "con error" ? "nota" : "ok"}" style="margin-bottom:10px">
+    <b>${esc(t.nombre)}</b>: ${t.estado === "en curso" ? `actualizando desde ${esc(t.inicio)}…` : `${esc(t.estado)} (${esc(t.inicio)} → ${esc(t.fin)})`}
+    ${t.log ? `<pre class="log">${esc(t.log)}</pre>` : ""}</div>`;
+  clearTimeout(tPoll);
+  if (t && t.estado === "en curso") tPoll = setTimeout(cargarFuentes, 5000);
+}
+$("tFuentes").addEventListener("click", async e => {
+  const b = e.target.closest("[data-fu]"); if (!b) return;
+  const id = b.dataset.id, acc = b.dataset.fu;
+  try {
+    if (acc === "editar") { abierta = abierta === id ? null : id; return cargarFuentes(); }
+    if (acc === "cancelar") { abierta = null; return cargarFuentes(); }
+    if (acc === "guardar") { await api("/api/admin/fuentes", { id, enlace: $("edEnlace").value, notas: $("edNotas").value,
+      nombre: (FU.fuentes.find(f => f.id === id) || {}).nombre, categoria: (FU.fuentes.find(f => f.id === id) || {}).categoria,
+      entidad: (FU.fuentes.find(f => f.id === id) || {}).entidad }); abierta = null; }
+    else if (acc === "actualizar") {
+      const f = FU.fuentes.find(x => x.id === id);
+      if (!confirm(`¿Descargar de nuevo «${f.nombre}»?${f.instrucciones ? "\n\n" + f.instrucciones : ""}\n\nSe hace en segundo plano; la herramienta sigue funcionando con los datos actuales mientras tanto.`)) return;
+      await api("/api/admin/fuentes", { id, accion: "actualizar" });
+    }
+    else if (acc === "marcar") await api("/api/admin/fuentes", { id, accion: "marcar" });
+    else if (acc === "eliminar") { if (!confirm("¿Quitar esta base de la lista?")) return; await api("/api/admin/fuentes", { id, accion: "eliminar" }); }
+    cargarFuentes();
+  } catch (err) { alert(err.message.replace(/^ValueError: /, "")); }
+});
+$("fFuente").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await api("/api/admin/fuentes", { nombre: $("fuNombre").value, categoria: $("fuCat").value, entidad: $("fuEnt").value,
+      enlace: $("fuEnlace").value, notas: $("fuNotas").value });
+    $("fFuente").reset(); $("fuMsg").innerHTML = `<div class="ok">Base ingresada.</div>`; cargarFuentes();
+  } catch (err) { $("fuMsg").innerHTML = `<div class="nota">${esc(err.message.replace(/^ValueError: /, ""))}</div>`; }
+};
+
+api("/api/auth/yo").then(u => {
+  const admin = u.rol === "admin";
+  $("yo").textContent = `${u.nombre} · ${admin ? "administrador" : "bases de datos"}`;
+  if (admin) {
+    cargarUsuarios(); cargarAccesos(); cargarActividad(); cargarFuentes();
+    setInterval(cargarActividad, 60000);
+  } else {
+    // usuario con permiso de bases de datos (#51): solo esa sección
+    ["secUsuarios", "secActividad", "secHistorial"].forEach(id => $(id).remove());
+    document.title = "Bases de datos · Evaluador GD";
+    cargarFuentes();
+  }
+});
+</script>
+</body>
+</html>

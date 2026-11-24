@@ -1,0 +1,8 @@
+{
+  "_instrucciones": "Copia este archivo como config_correo.json y ajusta los datos. La contraseña NO va aquí: defínela en la variable de entorno EVALUADOR_SMTP_CLAVE (en Outlook/Gmail con verificación en dos pasos, usa una contraseña de aplicación).",
+  "servidor": "smtp.office365.com",
+  "puerto": 587,
+  "tls": true,
+  "usuario": "tu.cuenta@dominio.com",
+  "remitente": "Evaluador GD <tu.cuenta@dominio.com>"
+}

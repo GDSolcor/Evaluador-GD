@@ -1,0 +1,22 @@
+[
+ {
+  "id": "ja_solar_jam66d50_650",
+  "fabricante": "JA Solar",
+  "modelo": "JAM66D50",
+  "wp": 650.0,
+  "largo": 2.382,
+  "ancho": 1.134,
+  "espesor": 0.03,
+  "peso_kg": 33.1,
+  "eficiencia": null,
+  "celdas": 198,
+  "bifacial": true,
+  "voc": null,
+  "isc": null,
+  "vmp": null,
+  "imp": null,
+  "fuente": "Datasheet panel JA JAM66D50 645-670.pdf",
+  "cargado_por": "j.quintero@solcor.com.co",
+  "fecha": "2026-10-13"
+ }
+]

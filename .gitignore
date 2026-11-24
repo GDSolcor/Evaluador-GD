@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Datos locales: bases de datos, GIS, catastro, usuarios, respaldos y credenciales (~40 GB)
+datos/*
+!datos/config_correo.ejemplo.json
+!datos/modulos.json
+!datos/plantillas/
+
+# Binarios descargables
+herramientas/bin/
+
+# Varios
+*.log
+.env

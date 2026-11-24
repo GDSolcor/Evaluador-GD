@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Revisión Evaluador GD</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Informe técnico: columna de lectura con tablas de hallazgos; semáforo de prioridad aparte del acento */
+  --bg: #f6f7f4;
+  --panel: #ffffff;
+  --ink: #17221d;
+  --muted: #5b6b63;
+  --line: #dde3df;
+  --accent: #0f6b4f;
+  --accent-soft: #e3f1ea;
+  --alta: #b42318;   --alta-bg: #fdecea;
+  --media: #a15c07;  --media-bg: #fdf3e2;
+  --baja: #3b5c8a;   --baja-bg: #e9f0fa;
+  --display: "Fraunces", Georgia, serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111814; --panel: #18211c; --ink: #e4ece7; --muted: #9db0a5; --line: #2b3832;
+    --accent: #5cc79c; --accent-soft: #1d3a2e;
+    --alta: #ff8a7e; --alta-bg: #3a1d1a; --media: #f2b25c; --media-bg: #3a2c15; --baja: #8fb4ec; --baja-bg: #1b2738;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111814; --panel: #18211c; --ink: #e4ece7; --muted: #9db0a5; --line: #2b3832;
+  --accent: #5cc79c; --accent-soft: #1d3a2e;
+  --alta: #ff8a7e; --alta-bg: #3a1d1a; --media: #f2b25c; --media-bg: #3a2c15; --baja: #8fb4ec; --baja-bg: #1b2738;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15.5px/1.6 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 20px 64px; display: grid; gap: 28px; }
+header { display: grid; gap: 8px; border-bottom: 2px solid var(--ink); padding-bottom: 18px; }
+.eyebrow { font: 500 12.5px/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 600 clamp(28px, 4.5vw, 40px)/1.12 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 24px/1.2 var(--display); margin: 0 0 4px; text-wrap: balance; }
+h3 { font-size: 16px; margin: 0; }
+p { margin: 0; max-width: 72ch; }
+.lead { font-size: 17px; color: var(--ink); }
+.meta { color: var(--muted); font-size: 13.5px; }
+section { display: grid; gap: 14px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile b { font: 600 24px/1.1 var(--display); font-variant-numeric: tabular-nums; }
+.tile span { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.tile.malo { border-left: 4px solid var(--alta); } .tile.regular { border-left: 4px solid var(--media); } .tile.bien { border-left: 4px solid var(--accent); }
+.tabla { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 640px; }
+th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+th { font: 600 12px/1.3 var(--mono); text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+code, .ref { font: 12.5px/1.4 var(--mono); background: var(--accent-soft); color: var(--ink); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.chip { display: inline-block; font: 600 11.5px/1 var(--mono); padding: 4px 7px; border-radius: 99px; white-space: nowrap; }
+.alta { color: var(--alta); background: var(--alta-bg); } .media { color: var(--media); background: var(--media-bg); } .baja { color: var(--baja); background: var(--baja-bg); }
+.hecho { color: var(--accent); background: var(--accent-soft); }
+.toc { display: flex; flex-wrap: wrap; gap: 8px; }
+.toc a { color: var(--accent); text-decoration: none; border: 1px solid var(--line); background: var(--panel); border-radius: 99px; padding: 5px 12px; font-size: 13.5px; }
+.toc a:hover, .toc a:focus-visible { border-color: var(--accent); outline: none; }
+ol.prior { margin: 0; padding-left: 22px; display: grid; gap: 8px; max-width: 80ch; }
+ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.fases { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.fase { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; }
+.fase h3 { font: 600 17px/1.2 var(--display); }
+.fase ul { font-size: 14px; }
+.aviso { border-left: 4px solid var(--media); background: var(--media-bg); padding: 12px 16px; border-radius: 6px; }
+a { color: var(--accent); }
+@media (max-width: 420px) { .wrap { padding: 22px 16px 48px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Evaluador GD · v2.2 · revisión del 3 de noviembre de 2026</div>
+  <h1>Revisión del código y oportunidades de mejora</h1>
+  <p class="lead">El evaluador es una herramienta funcional y bien resuelta en lo esencial: el layout, el modelo financiero que cuadra al peso con el Excel de Solcor y la autenticación. Hoy su mayor riesgo no está en el cálculo sino en la operación. No hay control de versiones, los respaldos viven en el mismo disco, no queda registro de errores y todo depende de un solo PC. Su mayor oportunidad está en tres frentes: la pendiente del terreno, el costo de conexión y una calculadora de canon máximo para negociar.</p>
+  <p class="meta">Leído completo: <code>servidor.py</code>, <code>motor/auth.py</code>, <code>motor/evaluador.py</code>, <code>motor/layout_engine.py</code>, <code>motor/leads.py</code> y <code>motor/evaluaciones.py</code>, más las partes centrales de <code>web/index.html</code> (red, evaluación, capas, formulario financiero). Revisión parcial del resto del motor. Medidas reales: pruebas, tiempos y tamaños de respuesta en este PC. Se cruzó con <code>DIAGNOSTICO.md</code> (8-oct) y <code>PLAN_UX.md</code> (10-oct) para no repetir lo ya resuelto.</p>
+</header>
+
+<nav class="toc" aria-label="Secciones">
+  <a href="#estado">Estado en cifras</a>
+  <a href="#prioridades">Diez prioridades</a>
+  <a href="#robustez">Robustez y seguridad</a>
+  <a href="#rendimiento">Rendimiento y escala</a>
+  <a href="#codigo">Código</a>
+  <a href="#funciones">Funciones nuevas</a>
+  <a href="#ux">Experiencia de usuario</a>
+  <a href="#monetizacion">Monetización</a>
+  <a href="#ruta">Hoja de ruta</a>
+</nav>
+
+<section id="estado">
+  <h2>Estado en cifras</h2>
+  <div class="tiles">
+    <div class="tile bien"><b>16 de 16</b><span>pruebas automáticas pasan, en 11 s</span></div>
+    <div class="tile bien"><b>0,0 pb</b><span>diferencia de TIR entre el motor y el Excel de Lérida</span></div>
+    <div class="tile bien"><b>1 s</b><span>para evaluar un predio de 3,4 ha (232 mesas)</span></div>
+    <div class="tile malo"><b>Sin git</b><span>no hay historial de versiones del código</span></div>
+    <div class="tile malo"><b>0</b><span>registros de errores: el servidor descarta su log y hay 24 <code>except… pass</code></span></div>
+    <div class="tile regular"><b>2,9 MB</b><span>pesa una vista de predios catastrales; con compresión, 0,7 MB</span></div>
+    <div class="tile regular"><b>4.179</b><span>líneas en un solo archivo de interfaz (<code>index.html</code>)</span></div>
+    <div class="tile regular"><b>22 GB</b><span>de datos en un solo disco; los 16 respaldos diarios, en el mismo disco</span></div>
+  </div>
+</section>
+
+<section id="prioridades">
+  <h2>Diez prioridades</h2>
+  <p>Ordenadas por la relación entre el riesgo que eliminan o el valor que agregan y el esfuerzo que cuestan. Las cinco primeras caben en una o dos sesiones de trabajo.</p>
+  <div class="card">
+    <ol class="prior">
+      <li><b>Poner el código en git</b>, con un repositorio privado que defina TI. Hoy un cambio malo no se puede deshacer y no hay forma de saber qué cambió entre una versión y otra.</li>
+      <li><b>Sacar los respaldos del PC</b>: copia diaria cifrada de <code>datos/respaldos</code> a SharePoint u OneDrive. Un daño del disco hoy borra usuarios, evaluaciones, leads y tickets.</li>
+      <li><b>Registro de errores y estado del servidor</b>: un archivo de log rotativo en <code>datos/logs</code>, una ruta <code>/api/salud</code> para el vigilante y reemplazar los <code>except… pass</code> por registros.</li>
+      <li><b>Comprimir las respuestas (gzip)</b>: reduce entre 60 % y 85 % lo que viaja por el túnel. Es el cambio con más efecto en la velocidad del mapa.</li>
+      <li><b>Corregir dos detalles de seguridad</b>: la tabla de invitaciones guarda el enlace completo con su token, y el bloqueo por intentos permite bloquear al administrador desde afuera.</li>
+      <li><b>Roles y permisos en los leads</b>: hoy cualquier usuario puede editar cualquier lead, cambiarle el estado y crear su carpeta en SharePoint. Además, no queda historial de cambios.</li>
+      <li><b>Pendiente del terreno</b> con un modelo de elevación (SRTM o ALOS, 30 m): descarta zonas empinadas y ajusta el pasillo. La función para el pasillo ya existe y no se usa.</li>
+      <li><b>Calculadora de canon máximo</b>: el canon por hectárea que deja la TIR en el objetivo. Le da al equipo un límite claro para negociar con el propietario.</li>
+      <li><b>Costo de conexión</b>: la distancia y el trazado al punto de conexión, con su costo en COP en el modelo financiero. Hoy la red se ve en el mapa, pero no pesa en la TIR.</li>
+      <li><b>Borrador automático y validación de campos</b>, pendientes del plan de interfaz. Evitan perder trabajo y resultados absurdos (un pasillo de 0 m, un DC/AC de 14).</li>
+    </ol>
+  </div>
+</section>
+
+<section id="robustez">
+  <h2>Robustez y seguridad</h2>
+  <p>La base es buena: contraseñas con PBKDF2 y sal, sesiones guardadas como hash, bloqueo por intentos, consultas SQL parametrizadas, tope al tamaño de las peticiones y permisos correctos en evaluaciones, soporte y módulos. Lo que sigue son los huecos.</p>
+  <div class="tabla"><table>
+    <thead><tr><th>Prioridad</th><th>Hallazgo</th><th>Dónde</th><th>Propuesta</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip alta">Alta</span></td><td>El código no está bajo control de versiones.</td><td><span class="ref">raíz del proyecto</span></td><td>Git local desde hoy y un remoto privado (GitHub, Azure DevOps o el que defina TI), con una rama por cambio y etiquetas por versión.</td></tr>
+      <tr><td><span class="chip alta">Alta</span></td><td>Los respaldos diarios quedan en el mismo disco que las bases.</td><td><span class="ref">servidor.py:751</span></td><td>Copia diaria a una carpeta de OneDrive o SharePoint, cifrada con una clave aparte, y una prueba de restauración al mes.</td></tr>
+      <tr><td><span class="chip alta">Alta</span></td><td>Sin registro: el servidor descarta su log de peticiones y 24 bloques <code>except… pass</code> ocultan fallos.</td><td><span class="ref">servidor.py:747</span></td><td>Módulo <code>logging</code> con archivo rotativo; registrar método, ruta, usuario, tiempo y error; ruta <code>/api/salud</code>.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>La tabla <code>tokens</code> guarda el enlace completo de invitación o recuperación, con el token en claro. Quien lea el archivo de la base obtiene enlaces válidos.</td><td><span class="ref">auth.py:175–179</span></td><td>Guardar solo el hash. Mostrar el enlace únicamente en la respuesta que lo crea, y regenerarlo si el administrador lo necesita de nuevo.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>El bloqueo cuenta los intentos por correo, no por IP. Desde internet, cinco intentos fallidos bloquean al administrador 15 minutos.</td><td><span class="ref">auth.py:113</span></td><td>Contar también por IP, con espera progresiva, y no bloquear a quien entra desde una IP con ingresos correctos recientes.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>Con el túnel la herramienta queda en internet y el administrador entra solo con contraseña.</td><td><span class="ref">auth.py</span></td><td>Segundo factor (TOTP con la librería estándar) para administradores, o Cloudflare Access con correo @solcor.com.co.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>Leads sin control de dueño ni rol: cualquiera edita, cambia el estado y crea el proyecto en SharePoint, sin historial.</td><td><span class="ref">leads.py:248, 301, 331</span></td><td>Roles (lector, comercial, administrador), dueño o responsable para editar y tabla de historial por lead.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>Los CTL traen cédulas y datos personales de propietarios. No hay política de tratamiento ni de retención.</td><td><span class="ref">ctl.py, soporte_adjuntos</span></td><td>Política de datos según la Ley 1581, borrado o anonimización a los N meses y acceso a los CTL solo por rol.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>Las peticiones no tienen tiempo límite: una conexión lenta retiene un hilo.</td><td><span class="ref">servidor.py:142</span></td><td><code>timeout = 60</code> en el manejador.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>Faltan encabezados CSP y HSTS.</td><td><span class="ref">servidor.py:144</span></td><td>Una política de contenido que permita solo el propio sitio y cdnjs; HSTS cuando la conexión sea HTTPS.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>SQLite sin modo WAL. Cada llamada de <code>auth</code> vuelve a ejecutar el esquema, también en cada petición.</td><td><span class="ref">auth.py:37</span></td><td>WAL y <code>busy_timeout</code>, esquema una sola vez al arrancar y migraciones numeradas.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="rendimiento">
+  <h2>Rendimiento y escala</h2>
+  <p>Medido en este PC con los datos reales. El cálculo es rápido; lo lento es lo que viaja por la red y el trabajo que se repite.</p>
+  <div class="tabla"><table>
+    <thead><tr><th>Respuesta</th><th>Tamaño hoy</th><th>Con gzip</th><th>Tiempo de cálculo</th></tr></thead>
+    <tbody>
+      <tr><td>Predios catastrales, vista a zoom 15 (358 predios)</td><td class="n">2.895 KB</td><td class="n">706 KB</td><td class="n">0,10 s</td></tr>
+      <tr><td>Municipios, vista regional (74)</td><td class="n">1.656 KB</td><td class="n">642 KB</td><td class="n">0,30 s</td></tr>
+      <tr><td>Interfaz <code>index.html</code></td><td class="n">315 KB</td><td class="n">91 KB</td><td class="n">—</td></tr>
+      <tr><td>Resultado de una evaluación (Mavalle, 3,4 ha)</td><td class="n">104 KB</td><td class="n">16 KB</td><td class="n">0,96 s layout · 0,83 s GIS · 1,0 s hidrografía</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tabla"><table>
+    <thead><tr><th>Prioridad</th><th>Hallazgo</th><th>Dónde</th><th>Propuesta</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip alta">Alta</span></td><td>Ninguna respuesta va comprimida.</td><td><span class="ref">servidor.py:144</span></td><td>gzip cuando el navegador lo acepte y la respuesta pase de 2 KB; caché con ETag para la interfaz y las imágenes.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>Las capas viajan con toda su geometría a cualquier zoom, con 7 a 15 decimales.</td><td><span class="ref">gis.features, catastro.features</span></td><td>Simplificar la geometría según el zoom, dejar 6 decimales (unos 10 cm) y guardar en caché por tesela. Más adelante, teselas vectoriales.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>Cada cambio de parámetro lanza una evaluación completa. La anterior se descarta en el navegador, pero el servidor la sigue calculando.</td><td><span class="ref">index.html:2246</span></td><td>Cancelar la petición anterior con AbortController. En el servidor, caché por huella de entradas y layout en un proceso aparte para no frenar a otros usuarios.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>La capa Pipeline vuelve a leer y decodificar todas las evaluaciones guardadas en cada carga.</td><td><span class="ref">evaluaciones.py:66</span></td><td>Guardar el centroide en columnas al guardar la evaluación.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>Escala: SQLite y un solo proceso alcanzan para el equipo actual (menos de 20 personas). No alcanzan para varias empresas.</td><td><span class="ref">arquitectura</span></td><td>Para el producto externo: PostgreSQL con PostGIS, datos separados por empresa y trabajos en cola.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="codigo">
+  <h2>Código y mantenimiento</h2>
+  <div class="tabla"><table>
+    <thead><tr><th>Prioridad</th><th>Hallazgo</th><th>Dónde</th><th>Propuesta</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip media">Media</span></td><td>Toda la interfaz en un archivo de 4.179 líneas, con 87 asignaciones de <code>innerHTML</code> y 84 <code>onclick</code>. Cada cambio arriesga otra parte.</td><td><span class="ref">web/index.html</span></td><td>Partir en módulos JavaScript nativos (mapa, layout, financiero, leads, soporte, informes), sin herramientas de compilación. Hacerlo por partes, al tocar cada tema.</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td><code>fetch</code> se reemplaza dos veces con dos manejos de error distintos.</td><td><span class="ref">index.html:820, 869</span></td><td>Una sola función <code>api()</code> con tiempo límite, mensajes unificados y botón «Reportar a soporte».</td></tr>
+      <tr><td><span class="chip media">Media</span></td><td>La prueba «financiero coincide con Lérida» pasa siempre: no compara las TIR.</td><td><span class="ref">pruebas.py:41–45</span></td><td>Comparar las cuatro TIR con tolerancia de 0,1 pb. Agregar un corpus de CTL reales anonimizados como prueba de regresión del lector.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>Las rutas del servidor son dos cadenas <code>if/elif</code> de más de 400 líneas.</td><td><span class="ref">servidor.py:215, 355</span></td><td>Una tabla de rutas con permisos declarados (<code>@ruta("/api/…", rol="admin")</code>), que se pueda probar y documentar.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td><code>layout_engine.py</code> es código heredado de la skill: del motor solo se usan la proyección y el área. <code>pitch_from_slope</code> está ahí sin uso.</td><td><span class="ref">layout_engine.py</span></td><td>Mover lo usado a <code>geometria.py</code> y retomar el cálculo de pasillo por pendiente en la mejora del terreno.</td></tr>
+      <tr><td><span class="chip baja">Baja</span></td><td>La versión «2.2» está escrita a mano en el servidor y en la licencia.</td><td><span class="ref">servidor.py:92</span></td><td>Versión única en un archivo, registro de cambios y versión visible en cada informe.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="funciones">
+  <h2>Funciones para llevarla a última generación</h2>
+  <p>Ordenadas por su efecto en la calidad de la decisión de inversión. Todas caben dentro de la regla de usar solo la librería estándar de Python, salvo donde se indica.</p>
+  <div class="tabla"><table>
+    <thead><tr><th>Función</th><th>Qué aporta</th><th>Cómo</th></tr></thead>
+    <tbody>
+      <tr><td><b>Pendiente y orientación del terreno</b></td><td>El mayor sesgo del layout actual: supone terreno plano. En los Andes hay predios con pendientes del 15 % que no se pueden construir, o que piden un pasillo mayor.</td><td>Modelo de elevación SRTM o ALOS (30 m) recortado a Colombia; pendiente por mesa; exclusión sobre un umbral; pasillo ajustado por pendiente norte-sur.</td></tr>
+      <tr><td><b>Calculadora de canon máximo</b></td><td>El canon por hectárea que deja la TIR SAS en el objetivo. Le da al comercial un límite claro para negociar.</td><td>Búsqueda binaria sobre el modelo financiero existente (una evaluación tarda 0,03 s).</td></tr>
+      <tr><td><b>Costo de conexión</b></td><td>Dos predios iguales valen distinto si uno está a 200 m de la red y el otro a 3 km.</td><td>Trazado más corto hasta el circuito elegido, siguiendo vías y linderos; costo por km de red MT y celda de conexión en el CAPEX.</td></tr>
+      <tr><td><b>Sensibilidades y escenarios</b></td><td>Saber qué variable mueve más la TIR antes de comprometerse.</td><td>Gráfico de tornado (PPA, CAPEX, canon, producción, IBR) y comparación de escenarios lado a lado.</td></tr>
+      <tr><td><b>Producción con PVGIS</b></td><td>Perfil mensual y horario en vez de un solo número anual, y una estimación P90.</td><td>API pública y gratuita de PVGIS (Comisión Europea), consultada al evaluar, con caché por sitio.</td></tr>
+      <tr><td><b>Rotación de la grilla</b></td><td>Más mesas en predios inclinados respecto al norte, a cambio de una pérdida pequeña de producción.</td><td>Probar azimuts de ±15° y mostrar la ganancia en MWp contra la pérdida en kWh.</td></tr>
+      <tr><td><b>Configuración este-oeste y seguidores</b></td><td>La skill este-oeste ya existe fuera del evaluador.</td><td>Integrarla como otra opción de mesa, con su propia densidad y producción.</td></tr>
+      <tr><td><b>Tablero del pipeline</b></td><td>MWp por etapa, conversión entre etapas y tiempo en cada una, por responsable.</td><td>Sobre los leads y las carpetas de SharePoint que el evaluador ya lee.</td></tr>
+      <tr><td><b>Historial y comparación de evaluaciones</b></td><td>Hoy guardar sobrescribe. No se ve cómo cambió un proyecto.</td><td>Versiones por evaluación con quién y cuándo, y comparación de dos versiones.</td></tr>
+      <tr><td><b>Asistente con IA</b></td><td>Leer los CTL atípicos que hoy fallan, redactar el resumen ejecutivo y el correo al propietario.</td><td>API de Claude por HTTP (no requiere librerías), con datos personales anonimizados antes de enviarlos.</td></tr>
+      <tr><td><b>Integraciones</b></td><td>Menos digitación doble.</td><td>Graph para correo y SharePoint (pendiente de los permisos de TI) y sincronización con el CRM.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="ux">
+  <h2>Experiencia de usuario</h2>
+  <p>Del plan del 10 de octubre ya están la guía, el manual, las pestañas de resultados y «Generar todos». Quedan pendientes, en este orden:</p>
+  <div class="tabla"><table>
+    <thead><tr><th>Estado</th><th>Mejora</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip alta">Pendiente</span></td><td>Borrador automático y oferta de recuperarlo</td><td>Si la sesión vence o se recarga la página, se pierde el trabajo sin guardar.</td></tr>
+      <tr><td><span class="chip alta">Pendiente</span></td><td>Rangos y unidades en los campos numéricos</td><td>Hoy un pasillo de 0 m o un DC/AC de 14 dan resultados absurdos sin aviso.</td></tr>
+      <tr><td><span class="chip media">Pendiente</span></td><td>Indicador de progreso al evaluar predios grandes</td><td>En predios de más de 100 ha la espera no se explica.</td></tr>
+      <tr><td><span class="chip media">Pendiente</span></td><td>Avisos unificados en una esquina (16 <code>alert</code> y <code>confirm</code> del navegador)</td><td>Hoy los mensajes salen en cuatro lugares distintos.</td></tr>
+      <tr><td><span class="chip media">Pendiente</span></td><td>Pantalla de inicio: «Tengo un KMZ», «Tengo una coordenada», «Viene de un lead»</td><td>El primer minuto decide si la herramienta se entiende.</td></tr>
+      <tr><td><span class="chip media">Pendiente</span></td><td>Modo campo en el celular, instalable y sin señal</td><td>En terreno solo se necesita ubicarse, tomar fotos y registrar el lead.</td></tr>
+      <tr><td><span class="chip baja">Pendiente</span></td><td>Accesibilidad: solo 7 atributos <code>aria</code> en toda la interfaz; foco visible y teclado</td><td>Uso con teclado y lectores de pantalla.</td></tr>
+      <tr><td><span class="chip hecho">Hecho</span></td><td>Guía, manual, pestañas de resultados, «Generar todos», formato de miles con coma decimal</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="monetizacion">
+  <h2>Monetización</h2>
+  <div class="aviso"><p><b>Antes de cualquier modelo de venta, conviene acordar por escrito con Solcor de quién es la herramienta.</b> <code>LICENCIA.md</code> la declara obra personal, pero se desarrolló en el cargo de Gerente de Desarrollo GD y con datos y plantillas de la empresa. En Colombia las obras creadas en una relación laboral pueden presumirse cedidas al empleador. Este punto merece la revisión de un abogado. El registro ante la DNDA sigue pendiente.</p></div>
+  <div class="tabla"><table>
+    <thead><tr><th>Modelo</th><th>Cómo genera valor</th><th>Qué requiere</th></tr></thead>
+    <tbody>
+      <tr><td><b>Captación de predios</b> (el más cercano)</td><td>Una página pública «¿Tu predio sirve para un parque solar?»: el propietario marca su predio, recibe una pre-evaluación y entra como lead al pipeline de Solcor. El valor se mide en MW originados.</td><td>Página pública con límite de uso, captcha propio, aviso de datos personales y un resumen sin cifras sensibles.</td></tr>
+      <tr><td><b>Ahorro interno medible</b></td><td>Horas por evaluación y por entregable antes y después. Justifica la inversión en nube y en desarrollo.</td><td>Registrar el tiempo desde la carga del predio hasta el primer entregable (el historial de accesos ya tiene casi todo).</td></tr>
+      <tr><td><b>Suscripción para otros desarrolladores GD</b></td><td>Cobro por usuario o por evaluación, o versión con la marca del cliente.</td><td>Separación de datos por empresa, nube, facturación, términos y acuerdos de servicio. Es el modelo de mayor esfuerzo.</td></tr>
+      <tr><td><b>Informes a terceros</b></td><td>Reporte predial y estudio de títulos preliminar como servicio a propietarios o comercializadores.</td><td>Revisión jurídica del alcance del estudio de títulos y una exención de responsabilidad clara.</td></tr>
+      <tr><td><b>Datos de red consolidados</b></td><td>Ventaja competitiva interna: pocas empresas tienen la red MT de los operadores en un solo mapa.</td><td>No conviene venderlos: cada visor tiene sus propias condiciones de uso. Usarlos para originar proyectos, no como producto.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="ruta">
+  <h2>Hoja de ruta propuesta</h2>
+  <div class="fases">
+    <div class="fase"><h3>Semanas 1 y 2 · Cimientos</h3><ul>
+      <li>Git y repositorio privado</li><li>Respaldos fuera del PC y prueba de restauración</li><li>Log rotativo y <code>/api/salud</code></li><li>gzip y caché de la interfaz</li><li>Token de invitación solo como hash; bloqueo también por IP</li><li>Prueba de Lérida que compare de verdad</li></ul></div>
+    <div class="fase"><h3>Mes 1 · Proteger el trabajo</h3><ul>
+      <li>Roles y permisos en leads, con historial</li><li>Borrador automático y validación de campos</li><li>Cancelar evaluaciones viejas</li><li>Capas simplificadas por zoom</li><li>Primer módulo separado de <code>index.html</code></li></ul></div>
+    <div class="fase"><h3>Meses 2 y 3 · Mejor decisión</h3><ul>
+      <li>Pendiente del terreno</li><li>Calculadora de canon máximo</li><li>Costo de conexión en el CAPEX</li><li>Tornado y escenarios</li><li>Producción con PVGIS</li><li>Tablero del pipeline</li></ul></div>
+    <div class="fase"><h3>Trimestre siguiente · Escala</h3><ul>
+      <li>Nube con TI y dirección fija</li><li>Correo y SharePoint por Graph</li><li>Página de captación de predios</li><li>Acuerdo de propiedad intelectual y decisión sobre producto externo</li><li>Modo campo en el celular</li></ul></div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>
