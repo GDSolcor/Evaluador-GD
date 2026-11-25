@@ -541,7 +541,8 @@ def ficha_tecnica(datos):
         ["Módulos", f"{num(s.get('modulos'))} × {num(p.get('modulo_wp'), 0)} Wp", "Modelo de módulo", p.get("modulo_nombre") or p.get("nombre") or "—"],
         ["Mesas", f"{num(s.get('mesas'))} de {mesa.get('modulos', '—')} módulos ({num(mesa.get('kwp'), 1)} kWp)",
          "Configuración de mesa", f"{p.get('filas')} filas × {p.get('columnas')} columnas, módulo {orient}"],
-        ["Dimensiones de mesa", f"{num(mesa.get('ancho'), 2)} × {num(mesa.get('profundidad'), 2)} m", "Inclinación / azimut", f"{num(p.get('inclinacion'), 1)}° / 180° (sur)"],
+        ["Dimensiones de mesa", f"{num(mesa.get('ancho'), 2)} × {num(mesa.get('profundidad'), 2)} m", "Inclinación / azimut", f"{num(p.get('inclinacion'), 1)}° / {num(p.get('azimut', 180), 1)}°"
+         + (" (sur)" if abs(float(p.get("azimut", 180)) - 180) < 0.05 else f" ({num(abs(float(p.get('azimut', 180)) - 180), 1)}° al {'este' if float(p.get('azimut', 180)) < 180 else 'oeste'} del sur)")],
         ["Pasillo entre filas", f"{num(p.get('pasillo'), 2)} m", "Retiro al lindero", f"{num(p.get('retiro'), 1)} m"],
         ["Inversores", f"{inv} × {num(p.get('potencia_inversor_kw'), 0)} kW", "Densidad", f"{num(s.get('densidad_kwp_ha'), 0)} kWp/ha"],
         ["Energía año 1", f"{num(s.get('energia_mwh_anio'), 0)} MWh/año", "Rendimiento específico", f"{num(p.get('rendimiento_kwh_kwp'), 0)} kWh/kWp·año"],

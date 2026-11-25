@@ -109,6 +109,41 @@ def limite_de_gd_recorta_sin_recortar_arriendo():
 
 
 @prueba
+def layout_girado_y_alineado_al_poligono():
+    # ticket #54: un lote rectangular girado 30° cabe mejor con las mesas giradas igual
+    import math
+    import evaluador
+    lon0, lat0, m = -73.08, 5.78, 1 / 111320.0
+    mx = m / math.cos(math.radians(lat0))  # grados de longitud por metro
+    a = math.radians(30)
+    esquinas = [(0, 0), (300, 0), (300, 60), (0, 60)]
+    coords = [[lon0 + (x * math.cos(a) - y * math.sin(a)) * mx, lat0 + (x * math.sin(a) + y * math.cos(a)) * m]
+              for x, y in esquinas]
+    capas = evaluador.desde_poligonos([{"nombre": "Lote", "coords": coords}])["capas"]
+    sur = evaluador.evaluar(capas, {})
+    assert sur["resumen"]["azimut"] == 180.0
+    girado = evaluador.evaluar(capas, {"azimut": 150})
+    assert girado["params"]["azimut"] == 150.0 and girado["resumen"]["mesas"] > sur["resumen"]["mesas"] * 1.15
+    # las mesas giradas conservan su tamaño y su ángulo
+    c = girado["mesas"][0]["coords"]
+    ancho = math.hypot((c[1][0] - c[0][0]) / mx, (c[1][1] - c[0][1]) / m)
+    rumbo = math.degrees(math.atan2((c[1][0] - c[0][0]) / mx, (c[1][1] - c[0][1]) / m)) % 180
+    assert abs(rumbo - 60) < 0.5, rumbo
+    assert abs(ancho - girado["mesa"]["ancho"]) < 0.05, ancho
+    auto = evaluador.evaluar(capas, {"alinear": True})
+    assert abs(auto["params"]["azimut"] - 150.0) <= 1.0, auto["resumen"]["azimut_candidatos"]
+    assert auto["resumen"]["mesas"] >= girado["resumen"]["mesas"] - 2
+    assert "alinear" not in auto["params"]
+    # en Mavalle girar casi no suma mesas: «Alinear» deja el sur (no cambia energía por 1 % de mesas)
+    res, _ = _mavalle()
+    assert evaluador.evaluar(res["capas"], {"alinear": True})["params"]["azimut"] == 180.0
+    # fuera de rango se limita al semicírculo sur; vacío o texto -> 180
+    assert evaluador.evaluar(capas, {"azimut": 20})["params"]["azimut"] == 90.0
+    assert evaluador.evaluar(capas, {"azimut": "x"})["params"]["azimut"] == 180.0
+    assert evaluador.evaluar(capas, {"azimut": ""})["params"]["azimut"] == 180.0
+
+
+@prueba
 def reparto_por_filas():
     import evaluador
     assert evaluador._reparto_por_filas([10] * 6, 2, 30) == [3, 3]

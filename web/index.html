@@ -160,6 +160,8 @@
   .tab.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   .fila-in { display: flex; gap: 6px; } .fila-in .btn2 { padding: 5px 12px; white-space: nowrap; }
   .fila-in select { min-width: 0; }
+  .azi { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .azi input[type=range] { flex: 1 1 100%; margin: 4px 0 0; }
+  .grid2 .azi input[data-p] { width: 84px; flex: none; } .azi .btn2 { padding: 5px 9px; white-space: nowrap; }
   .mesa-res { font-size: 11.5px; color: var(--muted); background: var(--bg); border-radius: 7px; padding: 5px 8px; line-height: 1.45; }
   .mesa-res b { color: var(--ink); }
   .mesa-mini { display: inline-grid; gap: 1px; vertical-align: middle; margin-right: 6px; background: #0d2436; padding: 1px; border-radius: 2px; }
@@ -670,6 +672,12 @@
       <label>Inclinación (°)<input data-p="inclinacion" type="number" step="0.5"></label>
       <label class="full">Orientación del módulo
         <select data-p="orientacion"><option value="vertical">Vertical · retrato (lado largo N-S, "V")</option><option value="horizontal">Horizontal · paisaje (lado largo E-O, "H")</option></select></label>
+      <label class="full" title="Hacia dónde miran los módulos, en grados desde el norte en sentido horario: 180° = sur (filas este-oeste). Gira el layout para aprovechar lotes inclinados. «Alinear» prueba el sur y los lados más largos del área construible y deja el que más mesas da.">Orientación del layout · azimut (°)
+        <div class="azi"><input type="range" id="aziRango" min="90" max="270" step="1" value="180">
+          <input data-p="azimut" type="number" min="90" max="270" step="0.5" value="180">
+          <button class="btn2" id="bAziSur" type="button" title="Volver al layout norte-sur (azimut 180°)">Sur</button>
+          <button class="btn2" id="bAziPol" type="button" title="Girar las mesas según los lados del polígono construible">Alinear al polígono</button></div>
+        <small class="hint" id="aziTxt"></small></label>
       <label>Filas por mesa (N-S)<input data-p="filas" type="number" min="1" max="8"></label>
       <label>Columnas por mesa (E-O)<input data-p="columnas" type="number" min="1" max="60"></label>
       <div class="full mesa-res" id="mesaRes"></div>
@@ -2062,17 +2070,47 @@ function listaCapas() {
 // ---------- parametros ----------
 function pintarParams() {
   if (estado.params.base_arriendo === "total") estado.params.base_arriendo = "util";  // nombre anterior (antes del 19-oct-2026)
+  if (!isFinite(parseFloat(estado.params.azimut))) estado.params.azimut = 180;  // guardadas antes del #54: norte-sur
   document.querySelectorAll("[data-p]").forEach(el => {
     const v = estado.params[el.dataset.p];
     if (v !== undefined) el.value = (["modulos_objetivo", "max_gd"].includes(el.dataset.p) && !v) ? "" : v;
   });
-  sincronizarModulo(); resumenMesa();
+  sincronizarModulo(); resumenMesa(); pintarAzimut();
 }
+// ---------- orientación del layout (#54) ----------
+function textoAzimut(a) {
+  a = +a; const d = Math.round((a - 180) * 10) / 10;
+  if (!d) return "180° · módulos mirando al sur, filas este-oeste";
+  const rumbo = a < 157.5 ? (a < 112.5 ? "E" : "SE") : a > 202.5 ? (a > 247.5 ? "O" : "SO") : "S";
+  return `${fmt(a, 1)}° · ${fmt(Math.abs(d), 1)}° hacia el ${d < 0 ? "este" : "oeste"} desde el sur (${rumbo}); filas a ${fmt(Math.abs(d), 1)}° de la línea este-oeste`;
+}
+function pintarAzimut() {
+  const a = parseFloat(estado.params.azimut), ok = isFinite(a) ? a : 180;
+  document.getElementById("aziRango").value = ok;
+  document.querySelector('[data-p="azimut"]').value = ok;
+  document.getElementById("aziTxt").textContent = textoAzimut(ok);
+}
+let alinearPoligono = false;
+document.getElementById("aziRango").addEventListener("input", e => {
+  document.querySelector('[data-p="azimut"]').value = e.target.value;
+  document.getElementById("aziTxt").textContent = textoAzimut(e.target.value);
+});
+document.getElementById("aziRango").addEventListener("change", e => {
+  document.querySelector('[data-p="azimut"]').dispatchEvent(new Event("change"));
+});
+document.getElementById("bAziSur").onclick = () => {
+  estado.params.azimut = 180; pintarAzimut(); document.querySelector('[data-p="azimut"]').dispatchEvent(new Event("change"));
+};
+document.getElementById("bAziPol").onclick = () => {
+  if (!estado.capas.length) return alert("Primero carga o dibuja el polígono del predio.");
+  alinearPoligono = true; evaluar();
+};
 function leerParams() {
   document.querySelectorAll("[data-p]").forEach(el => {
     estado.params[el.dataset.p] = esNum(el) ? parseFloat(el.value) : el.value;
   });
   ["modulos_objetivo", "max_gd"].forEach(k => { if (!(estado.params[k] > 0)) estado.params[k] = 0; });
+  if (!isFinite(estado.params.azimut)) estado.params.azimut = 180;
   // ancla del layout recortado: CT o punto de conexión (las mesas se ubican cerca)
   const anc = (EL.lista.find(x => x.tipo === "ct") || EL.lista.find(x => x.tipo === "conexion"));
   estado.params.ancla = anc ? centroEl(anc) : null;
@@ -2191,6 +2229,7 @@ let tEval;
 document.querySelectorAll("[data-p],[data-f]").forEach(el => el.addEventListener("change", () => {
   leerParams();
   if (["modulo_largo", "modulo_ancho"].includes(el.dataset.p)) { estado.params.modulo_id = ""; sincronizarModulo(); }
+  if (el.dataset.p === "azimut") pintarAzimut();
   resumenMesa(); clearTimeout(tEval); tEval = setTimeout(evaluar, 250);
 }));
 document.getElementById("preset").onchange = e => {
@@ -2254,15 +2293,17 @@ btnEval.onclick = evaluar;
 let seq = 0;
 async function evaluar() {
   if (!estado.capas.length) return;
-  const my = ++seq;
+  const my = ++seq, alinear = alinearPoligono;
+  alinearPoligono = false;
   btnEval.disabled = true; btnEval.innerHTML = '<span class="spin"></span> Calculando…';
   try {
     const r = await fetch("/api/evaluar", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ capas: estado.capas.concat(elementosComoCapas()), params: leerParams(), fin: leerFin() }) });
+      body: JSON.stringify({ capas: estado.capas.concat(elementosComoCapas()), params: alinear ? { ...leerParams(), alinear: true } : leerParams(), fin: leerFin() }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     if (my !== seq) return;
     estado.resultado = j;
+    if (j.params && isFinite(j.params.azimut)) { estado.params.azimut = j.params.azimut; pintarAzimut(); }
     capexGd();
     // años calendario del vector PPA (dependen del COD)
     const cod = j.financiero && j.financiero[0] ? +j.financiero[0].cod.slice(0, 4) : null;
@@ -2290,6 +2331,12 @@ function pintarResultado(j) {
     + (j.financiero && j.financiero[0] ? ` · TIR SAS ${fmt(100 * j.financiero[0].tir.equity_sas, 1)} %` : "");
   const notas = [];
   if (!j.areas.length) notas.push("No hay ninguna capa marcada como <b>Construible</b>. Asigna ese rol al polígono del predio en la lista de capas.");
+  if (s.azimut_candidatos && s.azimut_candidatos.length)
+    notas.push((s.azimut === 180 ? "Alinear al polígono: ninguna orientación da al menos 2 % más mesas que el sur, así que el layout queda <b>norte-sur (180°)</b>."
+      : `Layout alineado al polígono: azimut <b>${fmt(s.azimut, 1)}°</b>.`)
+      + ` Mesas por orientación probada (hasta ±45° del sur): ${s.azimut_candidatos.map(c => `${fmt(c.azimut, 1)}° → ${fmt(c.mesas)}`).join(" · ")}. Puedes ajustarlo a mano con la barra.`);
+  if (Math.abs((p.azimut ?? 180) - 180) >= 20)
+    notas.push(`Los módulos miran a <b>${fmt(p.azimut, 1)}°</b> (${fmt(Math.abs(p.azimut - 180), 1)}° fuera del sur). El rendimiento (kWh/kWp) que usa la energía supone orientación sur: con inclinaciones bajas la pérdida es pequeña, pero confírmala en PVsyst.`);
   if (!p.tarifa_arriendo_ha_mes) notas.push("Ingresa la <b>tarifa de arriendo</b> (COP/ha/mes) para calcular la oferta al propietario.");
   if (s.limitado_por) notas.unshift(`Layout limitado por <b>${esc(s.limitado_por)}</b>${s.limitado_por === "paneles objetivo" ? ` (${fmt(s.modulos_objetivo)} paneles → ${fmt(s.mesas)} mesas enteras de ${m.modulos})` : ` (${s.max_gd} GD × ${fmt(s.mesas_max_por_gd)} mesas)`}:
     se ubican <b>${fmt(s.modulos)}</b> de <b>${fmt(s.modulos_disponibles)}</b> módulos posibles en el terreno (${fmt(s.mesas)} de ${fmt(s.mesas_disponibles)} mesas),
@@ -2523,7 +2570,7 @@ function infoMesa(i, j) {
     "Módulos": `${m.modulos} (${p.filas} filas N-S × ${p.columnas} columnas E-O)`, "Potencia DC": `${fmt(m.kwp, 2)} kWp`,
     "Módulo": `${p.modulo_nombre || p.nombre || ""} · ${fmt(p.modulo_wp)} Wp`,
     "Dimensiones": `${fmt(m.ancho, 2)} × ${fmt(m.profundidad, 2)} m (proyección en planta)`,
-    "Área ocupada": `${fmt(m.ancho * m.profundidad, 1)} m²`, "Inclinación": `${fmt(p.inclinacion, 1)}° · azimut 180° (sur)` };
+    "Área ocupada": `${fmt(m.ancho * m.profundidad, 1)} m²`, "Inclinación": `${fmt(p.inclinacion, 1)}° · azimut ${textoAzimut(p.azimut ?? 180).split(" · ")[0]}` };
 }
 // Las capas GIS con relleno (catastro, áreas protegidas…) quedan encima del layout y se quedarían con el clic:
 // si el punto cae sobre una mesa, gana la mesa. Devuelve true cuando abrió la ficha de la mesa.
@@ -2583,15 +2630,16 @@ function dibujarLayout(j) {
   const largoProy = ladoNS * Math.cos(p.inclinacion * Math.PI / 180);
   j.mesas.forEach((me, i) => {
     const color = colorMesa(me);
-    const [[x0, y0], , [x1, y1]] = me.coords;
+    // ejes de la mesa: c0→c1 a lo ancho (fila de módulos), c0→c3 en la pendiente; sirve con el layout girado
+    const [[x0, y0], [xa, ya], , [xb, yb]] = me.coords, ux = xa - x0, uy = ya - y0, vx = xb - x0, vy = yb - y0;
+    const pto = (fx, fy) => [y0 + uy * fx + vy * fy, x0 + ux * fx + vx * fy];
     L.polygon(ll(me.coords), { renderer: rendCanvas, color: "#0b3b75", weight: .8, fillColor: color, fillOpacity: .78 })
       .on("click", () => { if (!DIB.modo) seleccionarMesa(i); }).addTo(gMesas);
     for (let r = 0; r < p.filas; r++) {
       const fy0 = (r * (largoProy + p.sep_filas)) / prof, fy1 = fy0 + largoProy / prof;
       for (let c = 0; c < p.columnas; c++) {
         const fx0 = (c * (ladoEO + p.sep_columnas)) / ancho, fx1 = fx0 + ladoEO / ancho;
-        const X0 = x0 + (x1 - x0) * fx0, X1 = x0 + (x1 - x0) * fx1, Y0 = y0 + (y1 - y0) * fy0, Y1 = y0 + (y1 - y0) * fy1;
-        L.polygon([[Y0, X0], [Y0, X1], [Y1, X1], [Y1, X0]], { renderer: rendCanvas, color: "#e2e8f0", weight: .6, fillColor: color, fillOpacity: .9 })
+        L.polygon([pto(fx0, fy0), pto(fx1, fy0), pto(fx1, fy1), pto(fx0, fy1)], { renderer: rendCanvas, color: "#e2e8f0", weight: .6, fillColor: color, fillOpacity: .9 })
           .on("click", ev => {
             if (DIB.modo) return;  // dejar pasar el clic a la herramienta de dibujo/predio
             L.DomEvent.stop(ev);
