@@ -1,8 +1,8 @@
 {
-  "_instrucciones": "Copia este archivo como config_correo.json y ajusta los datos. La contraseña NO va aquí: defínela en la variable de entorno EVALUADOR_SMTP_CLAVE (en Outlook/Gmail con verificación en dos pasos, usa una contraseña de aplicación).",
-  "servidor": "smtp.office365.com",
-  "puerto": 587,
-  "tls": true,
-  "usuario": "tu.cuenta@dominio.com",
-  "remitente": "Evaluador GD <tu.cuenta@dominio.com>"
+  "_instrucciones": "Copia este archivo como config_correo.json. Método recomendado: Microsoft Graph desde el buzón compartido (tenant y cliente de la aplicación registrada en Entra ID; el secreto va en la variable de entorno EVALUADOR_GRAPH_SECRETO, nunca aquí). Alternativa SMTP: metodo 'smtp' con servidor, puerto, tls y usuario, y la contraseña de aplicación en EVALUADOR_SMTP_CLAVE.",
+  "metodo": "graph",
+  "tenant": "00000000-0000-0000-0000-000000000000",
+  "cliente": "00000000-0000-0000-0000-000000000000",
+  "buzon": "tramites@solcor.com.co",
+  "remitente": "Evaluador GD <tramites@solcor.com.co>"
 }

@@ -70,7 +70,7 @@ mapa (Leaflet), la TRM del día y, si se activa, el túnel HTTPS para entrar des
   pública) de 12 h, 5 fallos en 15 min bloquean, tope de tamaño del cuerpo HTTP, límite de recuperaciones.
 - **Actividad:** historial de ingresos y cambios; `sesiones.ultima_actividad` → «en línea» (5 min) y
   métricas en `/api/admin/actividad`.
-- **Correo:** SMTP de Gmail (`datos/config_correo.json`, clave en la variable `EVALUADOR_SMTP_CLAVE`).
+- **Correo:** cuenta elegida en el panel (Usuarios → Correo de salida). Hoy: **Outlook clásico de este PC** con `m.bayona@solcor.com.co` (`herramientas/enviar_outlook.ps1`), porque el tenant de Solcor tiene apagado el SMTP autenticado. Para la nube: Microsoft Graph desde `tramites@solcor.com.co` (pendiente de TI). El panel solo marca «listo» tras un envío exitoso (`datos/correo_verificacion.json`).
 
 ## 3. Módulos
 
@@ -220,7 +220,7 @@ contenido que el GeoPackage).
   `datos/usuarios.db` ni el SharePoint real para probar.
 
 ### Variables de entorno
-`EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`.
+`EVALUADOR_GRAPH_SECRETO`, `EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`.
 
 ### Próximo paso de despliegue
 Servidor en la nube (recomendado: VM en Azure + Cloudflare Tunnel/Access) con dirección fija; al tenerla,

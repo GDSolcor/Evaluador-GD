@@ -28,6 +28,7 @@
   .t-on { background: var(--accent-soft); color: var(--accent); } .t-off { background: #f3f4f6; color: #9ca3af; }
   .ev-ingreso { color: var(--accent); } .ev-ingreso_fallido, .ev-ingreso_bloqueado, .ev-correo_fallido { color: var(--err); }
   .nota { padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; margin-bottom: 10px; }
+  .falla { padding: 8px 10px; border-radius: 8px; background: #fde8e6; color: var(--err); font-size: 12.5px; margin-bottom: 10px; word-break: break-word; }
   .ok { padding: 8px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 12.5px; margin-top: 8px; word-break: break-all; }
   code { font-size: 11.5px; background: #f3f5f4; padding: 1px 4px; border-radius: 4px; word-break: break-all; }
   .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -56,6 +57,29 @@
   <section id="secUsuarios">
     <h2>Usuarios</h2>
     <div id="avisoCorreo"></div>
+    <details id="dCorreo" style="margin:0 0 12px">
+      <summary style="cursor:pointer;font-weight:600">Correo de salida de las notificaciones (invitaciones, contraseñas, proyectos)</summary>
+      <form class="fila" id="fCorreo" autocomplete="off" style="margin-top:8px">
+        <label>Enviar con<select id="cMetodo">
+          <option value="outlook">Outlook de este PC (cuenta @solcor.com.co)</option>
+          <option value="gmail">Gmail</option>
+          <option value="otro">Otro servidor SMTP</option>
+          <option value="graph">Microsoft Graph (aplicación de TI)</option></select></label>
+        <label class="c-smtp">Cuenta que inicia sesión<input id="cUsuario" type="email" placeholder="nombre@solcor.com.co"></label>
+        <label>Dirección «De»<input id="cRemitente" type="email" placeholder="igual a la cuenta"
+          title="Normalmente la misma cuenta. Otra dirección (p. ej. un buzón compartido) solo funciona si la cuenta tiene permiso «Enviar como»."></label>
+        <label>Nombre visible<input id="cNombre" placeholder="Evaluador GD"></label>
+        <label class="c-otro">Servidor<input id="cServidor" placeholder="smtp.dominio.com"></label>
+        <label class="c-otro">Puerto<input id="cPuerto" type="number" value="587" style="width:80px"></label>
+        <label class="c-graph">Id del directorio (tenant)<input id="cTenant"></label>
+        <label class="c-graph">Id de la aplicación<input id="cCliente"></label>
+        <label class="c-clave"><span id="cClaveEt">Contraseña</span><input id="cClave" type="password" autocomplete="new-password"
+          placeholder="vacía = conservar la actual"></label>
+        <button class="pri" type="submit">Guardar</button>
+      </form>
+      <div id="cMsg"></div>
+      <small class="m" id="cAyuda"></small>
+    </details>
     <form class="fila" id="fNuevo">
       <label>Nombre<input id="nNombre" required></label>
       <label>Correo<input id="nCorreo" type="email" required></label>
@@ -118,7 +142,7 @@ const EVENTOS = { ingreso: "Ingreso", ingreso_fallido: "Ingreso fallido", ingres
   recuperacion_pendiente_envio: "Enlace de recuperación (sin correo)", invitacion_enviada: "Invitación enviada",
   invitacion_pendiente_envio: "Invitación (sin correo)", clave_restablecida: "Contraseña restablecida", clave_definida: "Contraseña definida",
   usuario_creado: "Usuario creado", usuario_modificado: "Usuario modificado", admin_creado: "Administrador creado",
-  enlace_generado_admin: "Enlace generado por admin", correo_fallido: "Fallo al enviar correo", correo_prueba: "Correo de prueba" };
+  enlace_generado_admin: "Enlace generado por admin", correo_fallido: "Fallo al enviar correo", correo_prueba: "Correo de prueba", correo_configurado: "Correo de salida cambiado" };
 let ultimo = [];
 async function api(url, body) {
   const r = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
@@ -131,20 +155,60 @@ function enlaceHTML(e) {
   return `<div class="ok">Enlace (${e.tipo === "invitacion" ? "invitación, vence en 7 días" : "recuperación, vence en 60 min"}) — cópialo y envíaselo:<br><code>${esc(e.enlace)}</code>
     <button type="button" data-copiar="${esc(e.enlace)}" style="margin-left:6px">Copiar</button></div>`;
 }
+const AYUDA_CORREO = {
+  outlook: "Envía con Outlook clásico de este PC, con la sesión que ya tiene abierta en Microsoft 365 (no usa SMTP ni guarda contraseña). Outlook clásico debe tener iniciada la sesión con esta cuenta; el servidor lo abre solo cuando hace falta. Si eliges otra dirección «De» (p. ej. tramites@), la cuenta necesita permiso «Enviar como» o «Enviar en nombre de».",
+  
+  gmail: "Gmail requiere verificación en dos pasos y una contraseña de aplicación (myaccount.google.com → Seguridad → Contraseñas de aplicaciones).",
+  otro: "Puerto 587 con STARTTLS o 465 con SSL.",
+  graph: "La entrega TI al registrar la aplicación en Entra ID con el permiso Mail.Send. Sirve para buzones compartidos y no depende de SMTP.",
+};
+function vistaCorreo() {
+  const m = $("cMetodo").value;
+  document.querySelectorAll("#fCorreo .c-smtp").forEach(x => x.style.display = m === "graph" ? "none" : "");
+  document.querySelectorAll("#fCorreo .c-otro").forEach(x => x.style.display = m === "otro" ? "" : "none");
+  document.querySelectorAll("#fCorreo .c-graph").forEach(x => x.style.display = m === "graph" ? "" : "none");
+  document.querySelectorAll("#fCorreo .c-clave").forEach(x => x.style.display = m === "outlook" ? "none" : "");
+  $("cClaveEt").textContent = m === "graph" ? "Secreto de la aplicación" : "Contraseña";
+  $("cAyuda").textContent = AYUDA_CORREO[m];
+}
+function llenarCorreo(ce) {
+  if ($("dCorreo").dataset.lleno) return;  // no pisar lo que el administrador está escribiendo
+  $("dCorreo").dataset.lleno = "1";
+  // Graph solo se muestra si ya está completo (lo configura TI); si falta algo, se parte de Microsoft 365
+  $("cMetodo").value = ce.metodo === "graph" && ce.archivo ? "graph" : (ce.metodo === "graph" ? "outlook" : (ce.proveedor && ce.proveedor !== "office365" ? ce.proveedor : "outlook"));
+  if (ce.metodo === "graph" && !ce.archivo) ce = { nombre: ce.nombre };
+  $("cUsuario").value = ce.metodo === "graph" ? "" : (ce.usuario || "");
+  $("cRemitente").value = ce.remitente && ce.remitente !== ce.usuario ? ce.remitente : (ce.metodo === "graph" ? ce.remitente || "" : "");
+  $("cNombre").value = ce.nombre || "Evaluador GD";
+  $("cServidor").value = ce.servidor || ""; $("cPuerto").value = ce.puerto || 587;
+  $("cTenant").value = ce.tenant || ""; $("cCliente").value = ce.cliente || "";
+  if (!ce.archivo) $("dCorreo").open = true;
+  vistaCorreo();
+}
 async function cargarUsuarios() {
   const j = await api("/api/admin/usuarios");
   const ce = j.correo_estado || {};
-  $("avisoCorreo").innerHTML = (j.correo
-    ? `<div class="ok" style="margin:0 0 10px">Correo de salida listo: ${esc(ce.usuario)} (${esc(ce.servidor)}).`
-    : `<div class="nota">Correo de salida incompleto: ${!ce.archivo ? "falta <code>datos/config_correo.json</code>" : `cuenta ${esc(ce.usuario)} configurada, pero falta la contraseña de aplicación (variable <code>EVALUADOR_SMTP_CLAVE</code>)`}.
-      Mientras tanto, copia el enlace que aparece junto a cada usuario y envíaselo tú.`)
+  const v = ce.verificacion || {}, cuenta = `<b>${esc(ce.nombre)} &lt;${esc(ce.remitente || ce.usuario)}&gt;</b> (${esc(ce.servidor)})`;
+  $("avisoCorreo").innerHTML = (!j.correo ? `<div class="nota">Correo de salida incompleto: ${!ce.archivo ? "elige la cuenta en «Correo de salida» (abajo)"
+        : `cuenta ${esc(ce.usuario)} sin contraseña guardada; escríbela en «Correo de salida»`}.
+      Mientras tanto, copia el enlace que aparece junto a cada usuario y envíaselo tú.`
+    : v.ok === true ? `<div class="ok" style="margin:0 0 10px">Correo de salida listo: las notificaciones salen como ${cuenta}. Último envío correcto: ${esc(v.fecha)}.`
+    : v.ok === false ? `<div class="falla">El correo de salida no está funcionando: ${cuenta} falló el ${esc(v.fecha)}.<br><small>${esc(v.detalle)}</small><br>
+        ${/smtp_auth_disabled|SmtpClientAuthentication is disabled/i.test(v.detalle) ? "Microsoft 365 tiene apagado el «SMTP autenticado» para Solcor: ninguna contraseña lo destraba. Pide a TI la aplicación para Microsoft Graph y elige «Microsoft Graph» en «Correo de salida». " : ""}Mientras tanto, copia el enlace que aparece junto a cada usuario y envíaselo tú.`
+    : `<div class="nota">Correo de salida sin probar: las notificaciones saldrían como ${cuenta}, pero la cuenta aún no ha enviado nada. Usa «Enviar correo de prueba» para confirmarlo.`)
     + ` <button type="button" id="bPruebaCorreo" style="margin-left:6px">Enviar correo de prueba</button> <span id="pruebaMsg"></span></div>`
     + (j.url_fija ? `<div class="ok" style="margin:0 0 10px">Los enlaces de invitación y recuperación usan la dirección fija <code>${esc(j.url_base)}</code>.</div>`
       : `<div class="nota">Los enlaces de invitación y recuperación usan la dirección vigente <code>${esc(j.url_base)}</code>.
         ${/trycloudflare/.test(j.url_base) ? "Es un túnel temporal: si cambia, los enlaces ya enviados dejan de abrir. Usa «Enlace para contraseña» para enviar uno nuevo; los enlaces pendientes de esta tabla ya muestran la dirección vigente." : ""}</div>`);
+  llenarCorreo(ce);
   $("bPruebaCorreo").onclick = async () => {
     $("pruebaMsg").textContent = "enviando…";
-    try { const r = await api("/api/admin/correo_prueba", {}); $("pruebaMsg").textContent = r.mensaje; cargarAccesos(); }
+    try {  // se vuelve a pintar el aviso con el resultado y luego se muestra el mensaje junto al botón
+      const r = await api("/api/admin/correo_prueba", {});
+      await cargarUsuarios(); cargarAccesos();
+      // si falló, el detalle ya está en el aviso rojo: junto al botón basta con decirlo
+      $("pruebaMsg").textContent = r.ok ? r.mensaje : (document.querySelector("#avisoCorreo .falla") ? "No salió: el detalle está arriba." : r.mensaje);
+    }
     catch (e) { $("pruebaMsg").textContent = e.message; }
   };
   $("tUsuarios").innerHTML = `<tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Estado</th><th>Último ingreso</th><th>Creado</th><th>Acciones</th></tr>` +
@@ -193,6 +257,22 @@ function navegador(ua) {
   const so = /Windows/.test(ua) ? "Windows" : /Mac OS/.test(ua) ? "macOS" : /Android/.test(ua) ? "Android" : /iPhone|iPad/.test(ua) ? "iOS" : /Linux/.test(ua) ? "Linux" : "";
   return `${n}${so ? " · " + so : ""}`;
 }
+$("cMetodo").onchange = vistaCorreo;
+$("fCorreo").onsubmit = async e => {
+  e.preventDefault();
+  const m = $("cMetodo").value, graph = m === "graph";
+  const cuerpo = { metodo: graph ? "graph" : m === "outlook" ? "outlook" : "smtp", proveedor: m, usuario: $("cUsuario").value,
+    remitente: $("cRemitente").value || $("cUsuario").value, nombre: $("cNombre").value, clave: $("cClave").value,
+    servidor: $("cServidor").value, puerto: +$("cPuerto").value || 587, tenant: $("cTenant").value, cliente: $("cCliente").value };
+  $("cMsg").textContent = "guardando…";
+  try {
+    const r = await api("/api/admin/correo_config", cuerpo);
+    $("cClave").value = "";
+    $("cMsg").innerHTML = `<div class="ok">Guardado. Las notificaciones salen como <b>${esc(r.correo_estado.remitente)}</b>. Usa «Enviar correo de prueba» para confirmar que la cuenta acepta el envío.</div>`;
+    delete $("dCorreo").dataset.lleno;
+    cargarUsuarios(); cargarAccesos();
+  } catch (err) { $("cMsg").innerHTML = `<div class="nota">${esc(err.message)}</div>`; }
+};
 $("fNuevo").onsubmit = async e => {
   e.preventDefault();
   try {

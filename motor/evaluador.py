@@ -60,7 +60,60 @@ PARAMS_DEFECTO = dict(
     modulos_objetivo=0,          # paneles deseados en el area (0 = llenar el area)
     max_gd=0,                    # numero maximo de GDs (0 = sin limite)
     trafo_kva_gd="",             # capacidad del transformador del CT de cada GD, en orden ("0, 630"): limita su AC (#48)
+    azimut=180.0,                # hacia dónde miran los módulos (° desde el norte, horario): 180 = sur, filas E-O (#54)
 )
+
+AZIMUT_MIN, AZIMUT_MAX = 90.0, 270.0  # de cara al este hasta de cara al oeste: nunca de espaldas al ecuador
+
+
+def _norm_azimut(a):
+    try:
+        a = float(str(a).replace(",", ".")) % 360.0
+    except (TypeError, ValueError):
+        return 180.0
+    return round(min(AZIMUT_MAX, max(AZIMUT_MIN, a)), 1)
+
+
+def _giro(azimut):
+    """Funciones (mundo -> marco, marco -> mundo). En el marco las filas de mesas quedan paralelas al eje x y
+    los módulos miran hacia -y, como en el layout norte-sur; girar el marco gira todo el layout (#54).
+    Azimut 180 + d: el marco es el mundo girado d grados en sentido antihorario."""
+    d = math.radians(azimut - 180.0)
+    if abs(d) < 1e-9:
+        return (lambda x, y: (x, y)), (lambda x, y: (x, y))
+    c, s = math.cos(d), math.sin(d)
+    return (lambda x, y: (x * c - y * s, x * s + y * c)), (lambda x, y: (x * c + y * s, -x * s + y * c))
+
+
+ALINEAR_MAX_GIRO = 45.0     # «Alinear al polígono» no gira más de esto desde el sur (la barra sí llega a 90-270)
+ALINEAR_GANANCIA_MIN = 0.02  # y solo deja el sur si gana al menos 2 % de mesas: girar cuesta energía
+
+
+def azimuts_poligono(polis_xy, n=3):
+    """Azimuts (90-270) que ponen las filas de mesas paralelas a los lados dominantes de los polígonos
+    construibles: se suman las longitudes de los lados por dirección (cada 1°) y se toman las n mayores
+    (sin repetir el sur ni direcciones a menos de 3° entre sí)."""
+    peso = {}
+    for pts in polis_xy:
+        for (xa, ya), (xb, yb) in _edges(pts):
+            L = math.hypot(xb - xa, yb - ya)
+            if L < 1e-6:
+                continue
+            k = int(round(math.degrees(math.atan2(xb - xa, yb - ya)) % 180.0)) % 180  # rumbo del lado (0-179)
+            peso[k] = peso.get(k, 0.0) + L
+    # se suman las direcciones vecinas (un lindero digitalizado a mano no es perfectamente recto)
+    suave = {k: sum(peso.get((k + i) % 180, 0.0) for i in (-2, -1, 0, 1, 2)) for k in peso}
+    out = []
+    for k in sorted(suave, key=lambda k: -suave[k]):
+        # los módulos miran perpendicular al lado: de los dos sentidos, el que queda hacia el sur
+        az = (k + 90.0) % 360.0
+        if not AZIMUT_MIN <= az <= AZIMUT_MAX:
+            az = (az + 180.0) % 360.0
+        if abs(az - 180.0) <= ALINEAR_MAX_GIRO and all(abs(az - o) > 3 for o in out + [180.0]):
+            out.append(az)
+        if len(out) >= n:
+            break
+    return out
 
 
 def trafos_ct(valor):
@@ -547,7 +600,7 @@ def evaluar(capas, params):
     p = dict(PARAMS_DEFECTO)
     p.update({k: v for k, v in (params or {}).items() if v is not None})
     for k, v in p.items():
-        if k not in ("nombre", "base_arriendo", "orientacion", "modulo_id", "modulo_nombre", "trafo_kva_gd") and isinstance(v, str):
+        if k not in ("nombre", "base_arriendo", "orientacion", "modulo_id", "modulo_nombre", "trafo_kva_gd", "alinear", "azimut") and isinstance(v, str):
             p[k] = float(v.replace(",", ".")) if v.strip() else 0.0
     p["filas"], p["columnas"] = int(p["filas"]), int(p["columnas"])
     if p["filas"] < 1 or p["columnas"] < 1:
@@ -555,22 +608,55 @@ def evaluar(capas, params):
     p["orientacion"] = "horizontal" if str(p.get("orientacion", "vertical")).lower().startswith("h") else "vertical"
     p["modulos_objetivo"] = int(float(p.get("modulos_objetivo") or 0))
     p["max_gd"] = int(float(p.get("max_gd") or 0))
+    p["azimut"] = _norm_azimut(p.get("azimut", 180.0))
+    alinear = str(p.pop("alinear", "")).lower() in ("1", "true", "si", "sí", "poligono")
 
     todos = [pt for c in capas for pt in c["coords"]]
     proj = LocalProjection(todos)
 
-    def shape(c, closed):
-        return _Shape(proj.project_all(c["coords"]), closed)
+    def construibles():
+        vistos, out = set(), []
+        for c in capas:
+            if c["rol"] != "construible" or c["tipo"] != "Polygon" or len(c["coords"]) < 3:
+                continue
+            firma = tuple((round(x, 7), round(y, 7)) for x, y in c["coords"])
+            if firma not in vistos:  # mismo polígono repetido: no sumar su área dos veces
+                vistos.add(firma)
+                out.append(c)
+        return out
 
-    exclusiones = []
-    for c in capas:
-        # "margen" propio: elementos del proyecto (CT, vía, árboles…) traen su propio retiro
-        if c["rol"] == "exclusion" and c["tipo"] == "Polygon":
-            exclusiones.append((shape(c, True), float(c.get("margen", p["margen_exclusion"]))))
-        elif c["rol"] in ("exclusion", "exclusion_linea") and c["tipo"] == "LineString":
-            exclusiones.append((shape(c, False), float(c.get("margen", p["buffer_lineas"]))))
-        elif c["rol"] == "ronda" and p["ronda_hidrica_m"] > 0:
-            exclusiones.append((shape(c, c["tipo"] == "Polygon"), p["ronda_hidrica_m"]))
+    def formas(azimut):
+        """Exclusiones y áreas construibles proyectadas y giradas al marco del layout."""
+        a_marco = _giro(azimut)[0]
+
+        def shape(c, closed):
+            return _Shape([a_marco(x, y) for x, y in proj.project_all(c["coords"])], closed)
+
+        excl = []
+        for c in capas:
+            # "margen" propio: elementos del proyecto (CT, vía, árboles…) traen su propio retiro
+            if c["rol"] == "exclusion" and c["tipo"] == "Polygon":
+                excl.append((shape(c, True), float(c.get("margen", p["margen_exclusion"]))))
+            elif c["rol"] in ("exclusion", "exclusion_linea") and c["tipo"] == "LineString":
+                excl.append((shape(c, False), float(c.get("margen", p["buffer_lineas"]))))
+            elif c["rol"] == "ronda" and p["ronda_hidrica_m"] > 0:
+                excl.append((shape(c, c["tipo"] == "Polygon"), p["ronda_hidrica_m"]))
+        return excl, [(c, shape(c, True)) for c in construibles()]
+
+    # «Alinear al polígono» (#54): se prueban el sur y los azimuts de los lados dominantes del área construible,
+    # (hasta ±45°) y se queda el que más mesas da, siempre que supere al sur en al menos 2 %; si no, queda el sur
+    azimut_candidatos = []
+    if alinear:
+        cands = [180.0] + azimuts_poligono([proj.project_all(c["coords"]) for c in construibles()])
+        for az in dict.fromkeys(round(a, 1) for a in cands):
+            excl, areas = formas(az)
+            n = sum(len(layout_area(shp, excl, p, pasos=3)) for _, shp in areas)
+            azimut_candidatos.append(dict(azimut=az, mesas=n))
+        sur = azimut_candidatos[0]["mesas"]
+        mejor = max(azimut_candidatos, key=lambda c: (c["mesas"], -abs(c["azimut"] - 180.0)))
+        p["azimut"] = mejor["azimut"] if mejor["mesas"] >= sur * (1 + ALINEAR_GANANCIA_MIN) and mejor["mesas"] > sur else 180.0
+    a_marco, a_mundo = _giro(p["azimut"])
+    exclusiones, areas_c = formas(p["azimut"])
 
     modulos_mesa = p["filas"] * p["columnas"]
     kwp_mesa = modulos_mesa * p["modulo_wp"] / 1000.0
@@ -585,15 +671,7 @@ def evaluar(capas, params):
             for j in range(cy0, cy1 + 1):
                 yield from idx.get((i, j), ())
 
-    vistos = set()
-    for c in capas:
-        if c["rol"] != "construible" or c["tipo"] != "Polygon" or len(c["coords"]) < 3:
-            continue
-        firma = tuple((round(x, 7), round(y, 7)) for x, y in c["coords"])
-        if firma in vistos:  # mismo polígono repetido: no sumar su área dos veces
-            continue
-        vistos.add(firma)
-        shp = shape(c, True)
+    for c, shp in areas_c:
         mesas = layout_area(shp, exclusiones, p)
         # si las áreas construibles se traslapan (p. ej. el mismo predio agregado dos veces o un
         # polígono dibujado encima de un predio), no repetir mesas donde ya hay una colocada
@@ -603,7 +681,7 @@ def evaluar(capas, params):
             colocadas.setdefault((int(r[0] // 50), int(r[1] // 50)), []).append(r)
             x0, y0, x1, y1 = r
             rects.append(r)
-            mesas_ll.append(dict(area=c["nombre"], coords=[proj.to_lonlat(x, y) for x, y in
+            mesas_ll.append(dict(area=c["nombre"], coords=[proj.to_lonlat(*a_mundo(x, y)) for x, y in
                                                             [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]]))
         areas_out.append(dict(nombre=c["nombre"], area_m2=polygon_area(shp.pts), mesas=len(mesas),
                               kwp=len(mesas) * kwp_mesa))
@@ -626,7 +704,7 @@ def evaluar(capas, params):
         n_lim, limitado_por = min(limites)
         if n_lim < disponibles:
             ancla = p.get("ancla")
-            ancla_xy = proj.to_xy(float(ancla[0]), float(ancla[1])) if isinstance(ancla, (list, tuple)) and len(ancla) == 2 else None
+            ancla_xy = a_marco(*proj.to_xy(float(ancla[0]), float(ancla[1]))) if isinstance(ancla, (list, tuple)) and len(ancla) == 2 else None
             keep = _recortar_mesas(rects, n_lim, ancla_xy)
             mesas_ll = [mesas_ll[i] for i in keep]
             rects = [rects[i] for i in keep]
@@ -749,5 +827,6 @@ def evaluar(capas, params):
             mesas_disponibles=disponibles, modulos_disponibles=disponibles * modulos_mesa,
             limitado_por=limitado_por, modulos_objetivo=p["modulos_objetivo"], max_gd=p["max_gd"],
             filas_fisicas=len(filas_fis), filas_compartidas=filas_compartidas, mesas_quitadas_por_fila=quitadas_fila,
+            azimut=p["azimut"], azimut_candidatos=azimut_candidatos,
         ),
     )
