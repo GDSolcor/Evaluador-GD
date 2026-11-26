@@ -1,136 +1,136 @@
-# Plan de integración · Portal de herramientas de Desarrollo GD
+# Plan de integración · Herramientas de Desarrollo GD en un solo sitio
 
-25 de noviembre de 2026. Integrar el **Evaluador GD** y la **Ruta de desarrollo GD** en un solo sitio, con un
-único inicio de sesión desde el que cada persona entra a la herramienta que tenga habilitada. Primero en un
-servidor local y después en la nube.
+25 de noviembre de 2026, actualizado el 26 de noviembre de 2026. Integrar el **Evaluador GD** y la **Ruta de
+desarrollo GD** en un solo sitio, con un único inicio de sesión desde el que cada persona entra a la herramienta que
+tenga habilitada.
+
+> **Cambio respecto a la primera versión.** La Ruta ya no es la aplicación Python local: se reescribió en TypeScript y
+> está publicada en Cloudflare Workers (`https://ruta-desarrollo-gd.solcor.workers.dev`). Por eso el plan ya no
+> construye un portal nuevo: **el Worker de la Ruta hace de portal** y el Evaluador se conecta detrás de él.
 
 ## 1. Punto de partida
 
 | | Evaluador GD | Ruta de desarrollo GD |
 |---|---|---|
-| Repositorio | `GDSolcor/Evaluador-GD` | `jonatan-gd/ruta-desarrollo-gd` (cuenta personal) |
-| Tecnología | Python sin librerías externas, SQLite, HTML/JS | Igual: Python sin librerías externas, SQLite, HTML/JS |
-| Puerto | 8765 | **8765** (chocan: hoy no pueden correr a la vez) |
-| Usuarios | `usuarios.db` propia; invitación y recuperación por correo; roles admin/usuario; bitácora | Tabla `usuarios` propia; roles admin/editor/lector; sin correo |
-| Cookie de sesión | `evaluador_sesion` | `sid` |
-| SharePoint | **Escribe** en `01 Pipeline` (crea carpetas GD NNNN y entregables) | **Lee** `01 Pipeline` cada 30 min (`sync.py`) |
-| Dónde corre | `C:\Evaluador GD` (datos fuera de OneDrive) | Dentro de la carpeta sincronizada `00 Área GD\08 App Desarrollo\ruta-rtb`, **con la base SQLite dentro de OneDrive** |
-| Acceso remoto | Túnel temporal de Cloudflare (URL cambia) | Solo local |
+| Repositorio | `GDSolcor/Evaluador-GD` (cuenta personal `GDSolcor`) | `sebastiansolcor/ruta-desarrollo-gd` (privado; `GDSolcor` es colaborador) |
+| Tecnología | Python sin librerías externas, SQLite, HTML/JS | TypeScript (Hono) en Cloudflare Workers; frontend estático HTML/JS |
+| Datos | ≈ 40 GB en disco: IGAC 14 GB, autoridades ambientales 16 GB, GIS Solcor 6 GB, red OR 1,4 GB, catastros | Postgres en Supabase |
+| Dónde corre | PC de `C:\Evaluador GD`; acceso remoto por túnel temporal de Cloudflare (la URL cambia) | Cloudflare (cuenta `solcor`), dirección fija `*.workers.dev` |
+| Usuarios | `usuarios.db` propia; invitación y recuperación por correo; roles admin/usuario; bitácora | Tabla `usuarios` en Postgres; PBKDF2; cookie `sid`; roles admin/editor/lector |
+| SharePoint | **Escribe** en `01 Pipeline` por la carpeta sincronizada de OneDrive | **Lee y escribe** por Microsoft Graph con la app de Entra ID «Ruta GD» (`Sites.Selected`) |
+| Correo | Outlook clásico del PC (cuenta corporativa); Graph listo para cuando TI registre la app | No envía correo |
+| Rutas web | Página y `/api/*` en la raíz | Página en la raíz; el Worker atiende solo `/api/*` |
 
-Las dos herramientas tienen la misma tecnología y el mismo modelo de sesión, lo que hace la integración
-sencilla: no hay que reescribirlas, solo ponerlas detrás de una puerta común.
+**Por qué el Evaluador no se pasa a Workers.** Workers no tiene disco, limita memoria y tiempo de CPU, y sus bases
+administradas no admiten 40 GB de SQLite. El Evaluador además genera Word, Excel, PowerPoint y PDF con Python.
+Llevarlo a Workers sería reescribirlo; no se justifica. Se queda en un servidor propio (hoy el PC, después una VM)
+y se publica detrás del Worker.
 
 ## 2. Arquitectura propuesta
 
 ```
-                         ┌──────────────────────────── Portal Desarrollo GD ───────────────────────────┐
-  Navegador ──https──►   │  /            inicio: tarjetas de las herramientas habilitadas              │
-  (oficina, casa,        │  /login       un solo inicio de sesión (local: correo+contraseña;           │
-   celular)              │               nube: cuenta Microsoft 365 de Solcor)                         │
-                         │  /admin       usuarios y permisos por herramienta                           │
-                         │  /evaluador/* ──proxy──► Evaluador GD   127.0.0.1:8765                      │
-                         │  /ruta/*      ──proxy──► Ruta de desarrollo GD 127.0.0.1:8780               │
-                         └──────────────────────────────────────────────────────────────────────────────┘
-                                         │ identidad firmada (correo + rol) en cada petición
-                                         ▼
-                         Cada herramienta confía en el portal y deja de pedir su propio login
+                ┌──────────── Cloudflare (cuenta solcor) ─────────────┐
+ Navegador ───► │ gd.solcor.com.co  (hoy ruta-desarrollo-gd.workers.dev) │
+                │                                                     │
+                │  /             Ruta: frontend estático              │
+                │  /api/*        Ruta: Worker + Supabase + Graph      │
+                │  /evaluador/*  Worker: valida la sesión de la Ruta, │
+                │                comprueba el permiso «evaluador»,    │
+                │                firma la identidad y reenvía ──────┐ │
+                └───────────────────────────────────────────────────┼─┘
+                                                                    │ túnel con nombre fijo
+                                                                    │ (solo el Worker puede entrar)
+                                                                    ▼
+                                   Evaluador GD · 127.0.0.1:8765 en «modo portal»
+                                   (PC hoy → VM Windows en Azure después)
 ```
 
-- **Un solo origen y una sola cookie.** El portal recibe todo el tráfico y reenvía por ruta
-  (`/evaluador/…`, `/ruta/…`). Las herramientas solo escuchan en `127.0.0.1`: nadie entra sin pasar por el portal.
-- **Identidad delegada.** El portal agrega a cada petición las cabeceras `X-GD-Usuario`, `X-GD-Rol` y una firma
-  HMAC con un secreto compartido (`GD_PORTAL_SECRETO`). Cada herramienta, en «modo portal», valida la firma,
-  crea el usuario en su tabla si no existe (para conservar autoría y bitácora) y omite su propio login.
-  Sin el secreto, cada herramienta sigue funcionando sola como hoy (útil para desarrollo y pruebas).
-- **Permisos por herramienta.** Tabla `permisos(usuario, herramienta, rol)`:
-  Evaluador → `usuario | admin`; Ruta → `lector | editor | admin`. Quien no tiene permiso no ve la tarjeta
-  y recibe 403 si intenta la ruta.
-- **Usuarios.** El portal hereda el módulo de usuarios del Evaluador (`motor/auth.py` + `motor/correo.py`), que ya
-  tiene invitaciones, recuperación de contraseña, bitácora y envío desde `tramites@solcor.com.co`. Los usuarios de
-  la Ruta se migran cruzando por correo y conservando su rol.
-- **Por qué rutas y no subdominios.** Con rutas basta una URL, un certificado y una cookie, y funciona igual en
-  local, con el túnel y en la nube. El costo es cambiar las URL absolutas de los dos frontends por relativas
-  (≈100 en el Evaluador y ≈70 en la Ruta; cambio mecánico y verificable con las pruebas).
+- **Un solo login: el de la Ruta.** El Worker ya resuelve el usuario desde la cookie `sid` (`auth.usuarioDe`). Para
+  `/evaluador/*` hace lo mismo y, si no hay sesión, envía al login de la Ruta.
+- **Permiso por herramienta.** Se agrega a `usuarios` de la Ruta la columna `evaluador` (`no | usuario | admin`).
+  Quien no lo tiene no ve el acceso al Evaluador y recibe 403 en `/evaluador/*`.
+- **Identidad firmada.** Antes de reenviar, el Worker:
+  1. borra cualquier cabecera `X-GD-*` que traiga el navegador;
+  2. agrega `X-GD-Usuario` (correo), `X-GD-Nombre`, `X-GD-Rol` y `X-GD-Fecha`;
+  3. firma esos valores con HMAC-SHA256 y el secreto `GD_PORTAL_SECRETO` (`X-GD-Firma`).
 
-## 3. Etapa 1 · Servidor local
+  El Evaluador valida la firma y que la fecha tenga menos de 60 s, crea el usuario si no existe (para conservar
+  autoría y bitácora) y omite su propio login.
+- **Túnel cerrado.** El túnel con nombre fijo no queda abierto a internet. Hay dos maneras de lograrlo:
+  - **Opción A (más simple):** el nombre del túnel (por ejemplo `evaluador-origen.solcor.com.co`) se protege con
+    Cloudflare Access usando un *service token*, y solo el Worker tiene sus credenciales (`CF-Access-Client-Id/Secret`).
+  - **Opción B:** Workers VPC, que conecta el Worker con el túnel privado sin nombre público.
 
-### Fase 0 · Ordenar antes de integrar (1 semana)
+  En los dos casos la firma HMAC es una segunda barrera.
+- **Sin Python en Cloudflare.** El Worker solo reenvía: la petición y la respuesta pasan en *streaming*, sin
+  procesarse, así que casi no consume CPU.
+- **El Evaluador sigue funcionando solo.** Sin `GD_PORTAL_SECRETO` arranca como hoy, con su propio login, en
+  `http://127.0.0.1:8765`. Sirve para desarrollo y pruebas, y como respaldo si el Worker falla.
 
-1. **Ruta: consolidar el código.** La copia local está 1 commit atrás de GitHub y tiene 6 archivos modificados sin
-   subir. Jonatan sube los cambios y se transfiere el repositorio a la organización `GDSolcor`.
-2. **Ruta: sacar la base de datos de OneDrive.** Mover la herramienta a `C:\Ruta GD` (o hacer que `data/` apunte a
-   `%LOCALAPPDATA%`, como ya hace el Evaluador). SQLite dentro de una carpeta sincronizada puede generar copias en
-   conflicto o corromperse. `sync.py` sigue leyendo `01 Pipeline` desde la carpeta sincronizada.
-3. **Puertos fijos:** portal 8700, Evaluador 8765, Ruta 8780 (8766 queda para las pruebas del Evaluador).
-4. **Subir a GitHub lo pendiente del Evaluador** (rama `soporte/2026-11-25-tickets-54-47` y el cambio de correo).
-5. **Matriz de usuarios y roles:** lista de quién usa cada herramienta y con qué rol.
-6. **Solicitud a TI** (en paralelo, porque tarda): registro de la aplicación en Entra ID con `Mail.Send` limitado
-   al buzón `tramites@solcor.com.co`. Más adelante se le agrega `Sites.Selected` para SharePoint y el inicio de
-   sesión con Microsoft 365.
+## 3. Cambios por pieza
 
-### Fase 1 · Portal y modo portal en las herramientas (2 a 3 semanas)
+### 3.1 Evaluador (`GDSolcor/Evaluador-GD`)
 
-| Paso | Entregable | Cómo se prueba |
+| Paso | Cambio | Cómo se prueba |
 |---|---|---|
-| 1.1 | Repositorio `GDSolcor/Portal-GD`: servidor Python (sin librerías externas), login, inicio con tarjetas, administración de usuarios y permisos | Pruebas automáticas al estilo de `herramientas/pruebas.py` |
-| 1.2 | Proxy inverso por ruta (GET/POST/PUT/DELETE, cuerpos grandes para KMZ y adjuntos, descargas, cabeceras) | Subir un KMZ, descargar entregables y CSV a través del portal |
-| 1.3 | Evaluador: URL relativas + «modo portal» (variable `GD_PORTAL_SECRETO`) | Sus 19 pruebas pasan, solo y detrás del portal |
-| 1.4 | Ruta: URL relativas + «modo portal» | Sus pruebas y un recorrido manual de cada vista |
-| 1.5 | Migración de usuarios de las dos bases al portal | Cada usuario entra una vez y ve solo sus herramientas |
-| 1.6 | Arranque único: `iniciar_portal.ps1` levanta las tres piezas; la tarea «vigilante» las vigila | Reiniciar el PC y comprobar que todo vuelve solo |
-| 1.7 | Túnel apuntando al portal (8700) en lugar del Evaluador | Entrar desde el celular |
+| E1 | **URL relativas.** Las ≈100 direcciones absolutas (`/api/...`, `/admin`, recursos) pasan a relativas o a un prefijo configurable (`EVALUADOR_PREFIJO=/evaluador`). Es obligatorio: `/api/*` en la raíz es de la Ruta. | Las 19 pruebas pasan con y sin prefijo |
+| E2 | **Modo portal** (`GD_PORTAL_SECRETO`): valida la firma, crea o actualiza el usuario y ignora su cookie `evaluador_sesion`. Los roles salen de `X-GD-Rol`. | Pruebas nuevas: firma válida, vencida, alterada y ausente |
+| E3 | **Enlaces de los correos** (invitación, recuperación, avisos) con `EVALUADOR_URL_PUBLICA=https://gd.solcor.com.co/evaluador`. En modo portal, la invitación lleva al login de la Ruta. | Correo de prueba desde el panel |
+| E4 | **Administración.** En modo portal, el alta de usuarios pasa a la Ruta; el panel del Evaluador conserva la configuración propia (correo, permisos de bases y leads). | Revisión manual del panel |
+| E5 | **Arranque.** `iniciar_servidor_y_tunel.ps1` levanta el túnel con nombre fijo (`cloudflared tunnel run`, credenciales fuera del repositorio) en lugar del temporal; la tarea «vigilante» se mantiene. | Reiniciar el PC y entrar desde el celular |
 
-Criterio de cierre: un usuario entra una vez, pasa del Evaluador a la Ruta sin volver a autenticarse, y un lector de
-la Ruta no puede editar ni entrar al Evaluador si no lo tiene habilitado.
+### 3.2 Ruta (`sebastiansolcor/ruta-desarrollo-gd`), por PR al repositorio de la Ruta
 
-### Fase 2 · Conexiones entre herramientas (1 a 2 semanas, opcional)
+| Paso | Cambio |
+|---|---|
+| R1 | `wrangler.jsonc`: `run_worker_first: ["/api/*", "/evaluador", "/evaluador/*"]` y el secreto `GD_PORTAL_SECRETO`. Para la opción A: `EVALUADOR_ORIGEN`, `CF_ACCESS_CLIENT_ID` y `CF_ACCESS_CLIENT_SECRET` como secretos. |
+| R2 | `src/worker.ts` (o una ruta nueva `src/routes/evaluador.ts`): sesión → permiso → limpiar y firmar cabeceras → `fetch` al origen, preservando método, cuerpo, `Content-Type`, descargas y `Set-Cookie` con la ruta `/evaluador`. |
+| R3 | Esquema: columna `evaluador` en `usuarios`; administración de usuarios con ese permiso. |
+| R4 | Frontend: en la barra lateral, un acceso «Evaluador GD» visible solo para quien tiene el permiso, y desde el Evaluador un enlace de vuelta a la Ruta. |
+| R5 | Pruebas en `tests/api/`: sin sesión → login; sin permiso → 403; cabeceras falsificadas se descartan; firma verificable con el mismo secreto. El origen se simula como ya hacen con `fakeGraph`. |
 
-- Del lead E1 en el Evaluador, enlace directo al proyecto en la Ruta (mismo número GD) y viceversa.
-- La Ruta toma del Evaluador los datos del predio (coordenadas, área, capacidad) en lugar de leerlos de PDF.
-- Un solo panel de soporte/tiquets para las dos herramientas.
+### 3.3 Cloudflare y Microsoft 365
 
-## 4. Etapa 2 · Nube
+- **Túnel con nombre fijo** en la cuenta `solcor` (`cloudflared tunnel create evaluador-gd`) apuntando a
+  `http://127.0.0.1:8765`. Termina con las URL que cambian y con los enlaces de invitación rotos.
+- **Dominio propio (recomendado):** `gd.solcor.com.co` como dominio del Worker. Exige que la zona `solcor.com.co`
+  (o un subdominio delegado) esté en Cloudflare; si no, se sigue en `*.workers.dev` sin cambiar nada más.
+- **Entra ID:** Solcor ya registró la app «Ruta GD» para SharePoint. Para el Evaluador se pide un registro
+  igual con `Mail.Send` limitado al buzón `tramites@solcor.com.co` y, después, `Sites.Selected` para escribir
+  `01 Pipeline` por Graph. El código de envío por Graph ya está listo en `motor/correo.py`.
 
-### Recomendación
+## 4. Fases
 
-**Máquina virtual Windows en Azure + Cloudflare Tunnel con nombre fijo + Cloudflare Access con Microsoft Entra ID.**
+| Fase | Contenido | Quién | Duración |
+|---|---|---|---|
+| 0 · Accesos | Permiso de escritura para `GDSolcor` en el repositorio de la Ruta (o mover los dos repositorios a una organización de Solcor); acceso a la cuenta Cloudflare `solcor`; solicitud a TI de la app de Entra ID del Evaluador; integrar el PR GDSolcor/Evaluador-GD#1 | Desarrollo GD, Sebastián, TI | 1 semana |
+| 1 · Evaluador listo para el portal | E1 a E4, con el Evaluador aún en su URL actual | Evaluador | 1 a 2 semanas |
+| 2 · Túnel fijo | E5 y túnel con nombre; Access con *service token* (opción A) | Evaluador + administrador de Cloudflare | 2 a 3 días |
+| 3 · Worker como portal | R1 a R5 en una rama de la Ruta; Cloudflare publica la vista previa de la rama; prueba completa; integrar a `main` | Ruta | 1 a 2 semanas |
+| 4 · Corte de usuarios | Pasar los usuarios del Evaluador a la Ruta cruzando por correo (los que no existan se invitan desde la Ruta), activar `GD_PORTAL_SECRETO` en el Evaluador y retirar el túnel temporal | Las dos | 1 día |
+| 5 · Evaluador a la nube | VM Windows en Azure (B2ms + 256 GB, ≈ USD 80–110/mes), copia de datos, servicio de Windows, mismo túnel con nombre (solo cambia el equipo donde corre `cloudflared`); correo por Graph porque en la VM no hay Outlook | Evaluador + TI | 1 a 2 semanas |
+| 6 · SharePoint por Graph y endurecimiento | El Evaluador escribe `01 Pipeline` por Graph y se retira OneDrive de la VM; opcional: login con la cuenta Microsoft 365 en la Ruta (Entra ID) | Las dos | 2 a 3 semanas |
 
-- **Por qué una VM y no un servicio administrado:** el Evaluador usa varios GB de datos geográficos (catastro,
-  GIS Solcor, hidrografía) y SQLite; una VM con disco propio los aloja sin cambios. App Service o Render obligarían a
-  migrar a otra base de datos y a almacenamiento de objetos antes de tiempo.
-- **Por qué Windows al inicio:** permite usar el cliente de OneDrive con una cuenta de servicio para seguir leyendo
-  y escribiendo `01 Pipeline` sin cambiar código el primer día. Después se migra a Graph (fase 4) y la VM puede
-  pasar a Linux.
-- **Acceso:** `gd.solcor.com.co` (o similar) con Cloudflare Access exige la cuenta Microsoft 365 de Solcor y su
-  verificación en dos pasos. El portal lee la identidad de Access (`Cf-Access-Jwt-Assertion`, validando la firma)
-  y ya no maneja contraseñas: altas y bajas de personal quedan en manos de TI.
-- **Costo orientativo:** VM B2ms (2 vCPU, 8 GB) + disco de 256 GB ≈ USD 80–110/mes; Cloudflare Tunnel y Access
-  gratis hasta 50 usuarios. A confirmar con TI según los acuerdos de Microsoft de Solcor.
-
-### Fases
-
-| Fase | Contenido | Duración |
-|---|---|---|
-| 3 · Montaje | VM, Python, copia de datos de solo lectura, servicios de Windows para las tres piezas, túnel con nombre fijo, `EVALUADOR_URL_PUBLICA`, `COOKIE_SECURE=1`, respaldos diarios a SharePoint/Azure con prueba de restauración mensual | 1 a 2 semanas |
-| 3b · Corte | Copiar bases (`usuarios`, `evaluaciones`, `leads`, `soporte`, `ruta_rtb`) en una ventana acordada, congelar el PC local, reenviar invitaciones con la nueva URL | 1 día |
-| 4 · SharePoint por Graph | El Evaluador crea carpetas y sube entregables por Graph; `sync.py` lee por Graph; se retira OneDrive de la VM | 2 a 3 semanas |
-| 5 · Endurecimiento | Inicio de sesión solo con Microsoft 365, monitoreo de disponibilidad, bitácora centralizada, plan de recuperación | 1 semana |
+**Criterio de cierre de la etapa 4:** un usuario entra una vez en la Ruta, abre el Evaluador sin volver a
+autenticarse, y un usuario sin el permiso no puede abrirlo ni con la URL directa ni con la del túnel.
 
 ## 5. Riesgos y cómo se controlan
 
 | Riesgo | Control |
 |---|---|
-| Base de la Ruta dentro de OneDrive (corrupción o copias en conflicto) | Fase 0, paso 2, antes de cualquier otra cosa |
-| Ejecución de tiquets con Claude en la Ruta (`claude_runner.py`) depende del PC de Jonatan | En la nube queda desactivada; los tiquets se atienden desde el PC de desarrollo contra GitHub |
-| Enlaces de invitación enviados con la URL del túnel temporal | Se reenvían cuando exista la dirección fija |
-| Dos herramientas escribiendo en `01 Pipeline` | Solo el Evaluador crea carpetas; la Ruta solo lee. Se mantiene así |
-| Dependencia de TI para Entra ID | Solicitud en la Fase 0; la etapa local no la necesita |
-| Respaldos en el mismo disco | Copia diaria cifrada fuera de la VM desde la Fase 3 |
+| Peticiones largas del Evaluador (evaluaciones, generación de entregables): Cloudflare corta a los ≈100 s sin respuesta del origen | Medir en la fase 1; lo que tarde más se pasa a tarea en segundo plano con consulta de avance |
+| Subidas grandes (KMZ, adjuntos) | El límite de cuerpo de Cloudflare (100 MB en planes Free/Pro) cubre los KMZ actuales; el Worker reenvía en *streaming* |
+| `/api/*` del Evaluador choca con la Ruta | Paso E1 antes de cualquier otra cosa |
+| Alguien llega al Evaluador saltándose el Worker | Túnel cerrado con Access o Workers VPC, más la firma HMAC con vencimiento |
+| El Evaluador depende de que el PC esté encendido | Fase 5; mientras tanto, la tarea «vigilante» y aviso en el Worker cuando el origen no responde (502 con mensaje claro) |
+| Repositorios en cuentas personales (`GDSolcor`, `sebastiansolcor`) | Fase 0: organización de Solcor en GitHub con los dos repositorios |
+| Secretos (`GD_PORTAL_SECRETO`, *service token*, Graph) | Secretos de Wrangler en Cloudflare; variables de entorno o DPAPI en el servidor; nunca en archivos del repositorio |
+| Correo en la nube | Outlook solo sirve en un PC con sesión iniciada; en la VM se usa Graph (solicitud a TI en la fase 0) |
 
 ## 6. Decisiones pendientes
 
-1. Confirmar rutas (`/evaluador`, `/ruta`) en un solo dominio frente a subdominios.
-2. Nombre del dominio en la nube (por ejemplo `gd.solcor.com.co`) y quién administra el DNS.
-3. Transferir `ruta-desarrollo-gd` a `GDSolcor` y quién mantiene cada herramienta.
-4. Proveedor de nube: Azure (recomendado por Microsoft 365) u otro que defina TI.
-5. Si en la nube el login es solo Microsoft 365 o también se admiten usuarios externos (aliados) con contraseña.
+1. Dominio: `gd.solcor.com.co` (requiere DNS en Cloudflare) o seguir en `ruta-desarrollo-gd.solcor.workers.dev`.
+2. Túnel cerrado con Access y *service token* (opción A, recomendada) o con Workers VPC (opción B).
+3. Crear una organización de Solcor en GitHub y mover allí los dos repositorios, y quién mantiene cada herramienta.
+4. Quién administra la cuenta Cloudflare `solcor` y crea el túnel.
+5. Si más adelante el login pasa a ser solo con Microsoft 365, o se mantienen usuarios externos con contraseña.
