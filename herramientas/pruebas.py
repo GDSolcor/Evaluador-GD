@@ -428,6 +428,92 @@ def gis_y_red_responden():
     assert json.dumps(red.arbol())
 
 
+@prueba
+def portal_identidad_firmada():
+    """Sitio común (Worker de la Ruta): la identidad firmada crea o reconoce al usuario y respeta los desactivados."""
+    import auth
+    sec, t = "secreto-de-prueba", 1_800_000_000
+    def cab(correo="luis@prueba.co", nombre="Luis%20P%C3%A9rez", rol="usuario", fecha=t, firma=None):
+        f = str(fecha)
+        return {"x-gd-usuario": correo, "x-gd-nombre": nombre, "x-gd-rol": rol, "x-gd-fecha": f,
+                "x-gd-firma": firma or auth.firma_portal(sec, f, correo, nombre, rol)}
+    ident = auth.verificar_portal(sec, cab(), t + 30)
+    assert ident == dict(correo="luis@prueba.co", nombre="Luis Pérez", rol="usuario"), ident
+    assert auth.verificar_portal(sec, cab(), t + 500) is None                      # vencida
+    assert auth.verificar_portal("otro", cab(), t) is None                         # otro secreto
+    falsa = cab(); falsa["x-gd-rol"] = "admin"
+    assert auth.verificar_portal(sec, falsa, t) is None                            # rol alterado
+    assert auth.verificar_portal(sec, cab(rol="jefe"), t) is None                  # rol desconocido
+    assert auth.verificar_portal("", cab(), t) is None                             # sin secreto no hay portal
+    u = auth.usuario_portal(ident)
+    assert u["portal"] and u["correo"] == "luis@prueba.co" and u["nombre"] == "Luis Pérez" and u["rol"] == "usuario"
+    u2 = auth.usuario_portal(dict(ident, rol="admin"))                             # el rol lo decide el portal
+    assert u2["id"] == u["id"] and u2["rol"] == "admin"
+    auth.actualizar_usuario(u["id"], {"activo": 0}, "admin@prueba.co")
+    assert auth.usuario_portal(ident) is None                                      # desactivado aquí: sin acceso
+
+
+@prueba
+def paginas_con_direcciones_relativas():
+    """Detrás de /evaluador/ las páginas no pueden pedir «/api/...»: en el sitio común esas rutas son de la Ruta."""
+    import re
+    malas = []
+    for f in glob.glob(os.path.join(RAIZ, "web", "*.html")):
+        with open(f, encoding="utf-8") as fh:
+            for n, linea in enumerate(fh, 1):
+                if re.search(r"""["'`(]/(api/|marca/|login\b|manual\b|admin\b|ejemplos/)|href=["']/["']|location\.href = ["']/["']""", linea):
+                    malas.append(f"{os.path.basename(f)}:{n}")
+    assert not malas, malas
+
+
+@prueba
+def portal_servidor():
+    """El servidor con GD_PORTAL_SECRETO acepta la identidad firmada, rechaza una falsa y sin firma pide su login."""
+    import socket
+    import subprocess
+    import time
+    import urllib.error
+    import urllib.request
+    import auth
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0)); puerto = s.getsockname()[1]
+    sec = "secreto-servidor-prueba"
+    env = dict(os.environ, GD_PORTAL_SECRETO=sec)
+    p = subprocess.Popen([sys.executable, os.path.join(RAIZ, "servidor.py"), "--puerto", str(puerto), "--sin-navegador",
+                          "--usuarios", os.path.join(TMP, "usuarios_portal.db")],
+                         cwd=RAIZ, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def pedir(ruta, cab=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{puerto}{ruta}", headers=cab or {})
+        class SinRedir(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        try:
+            with urllib.request.build_opener(SinRedir).open(req, timeout=10) as r:
+                return r.status, r.read().decode("utf-8", "replace"), r.headers
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace"), e.headers
+    try:
+        for _ in range(100):
+            try:
+                pedir("/api/auth/estado"); break
+            except OSError:
+                time.sleep(0.2)
+        f = str(int(time.time()))
+        firma = auth.firma_portal(sec, f, "maria@prueba.co", "Mar%C3%ADa", "admin")
+        cab = {"X-GD-Usuario": "maria@prueba.co", "X-GD-Nombre": "Mar%C3%ADa", "X-GD-Rol": "admin", "X-GD-Fecha": f, "X-GD-Firma": firma}
+        st, cuerpo, _ = pedir("/api/auth/yo", cab)
+        yo = json.loads(cuerpo)
+        assert st == 200 and yo["correo"] == "maria@prueba.co" and yo["nombre"] == "María" and yo["portal"], (st, cuerpo)
+        st, _, h = pedir("/login", cab)
+        assert st == 302 and h["Location"] == "/", st                              # en el portal no hay login propio
+        st, _, _ = pedir("/api/auth/yo", dict(cab, **{"X-GD-Rol": "usuario"}))    # firma que no corresponde
+        assert st == 403, st
+        st, _, _ = pedir("/api/auth/yo")                                          # sin firma: login propio, como siempre
+        assert st == 401, st
+    finally:
+        p.terminate(); p.wait(10)
+
+
 if __name__ == "__main__":
     fallas = 0
     for f in PRUEBAS:

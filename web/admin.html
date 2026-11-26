@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" type="image/svg+xml" href="/marca/icono.svg">
+<link rel="icon" type="image/svg+xml" href="marca/icono.svg">
 <title>Administración · Evaluador GD</title>
 <style>
   :root { --bg: #f4f6f5; --panel: #fff; --ink: #0d2436; --muted: #5a6776; --line: #dde3e6; --accent: #23922f; --accent-soft: #e6f4e3; --warn: #b4531f; --warn-soft: #fbece3; --err: #b42318; }
@@ -52,7 +52,7 @@
 </style>
 </head>
 <body>
-<header><img src="/marca/solcor_negativo.png" alt="Solcor Colombia"><b>Evaluador GD · Administración</b><span class="sp"></span><span id="yo"></span><a href="/">← Volver al evaluador</a></header>
+<header><img src="marca/solcor_negativo.png" alt="Solcor Colombia"><b>Evaluador GD · Administración</b><span class="sp"></span><span id="yo"></span><a href="./">← Volver al evaluador</a></header>
 <main>
   <section id="secUsuarios">
     <h2>Usuarios</h2>
@@ -147,7 +147,7 @@ let ultimo = [];
 async function api(url, body) {
   const r = await fetch(url, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
   const j = await r.json().catch(() => ({}));
-  if (r.status === 401) location.href = "/login";
+  if (r.status === 401) location.href = "login";
   if (!r.ok) throw new Error(j.error || "Error");
   return j;
 }
@@ -186,10 +186,12 @@ function llenarCorreo(ce) {
   vistaCorreo();
 }
 async function cargarUsuarios() {
-  const j = await api("/api/admin/usuarios");
+  const j = await api("api/admin/usuarios");
   const ce = j.correo_estado || {};
   const v = ce.verificacion || {}, cuenta = `<b>${esc(ce.nombre)} &lt;${esc(ce.remitente || ce.usuario)}&gt;</b> (${esc(ce.servidor)})`;
-  $("avisoCorreo").innerHTML = (!j.correo ? `<div class="nota">Correo de salida incompleto: ${!ce.archivo ? "elige la cuenta en «Correo de salida» (abajo)"
+  $("avisoCorreo").innerHTML = (j.portal ? `<div class="ok" style="margin:0 0 10px">Entraste por el sitio común (Herramientas de Desarrollo GD).
+    Allí se crean los usuarios, se cambian las contraseñas y se da o se quita el acceso al Evaluador (Datos → Usuarios).
+    Aquí sigues definiendo el alcance, los permisos de bases de datos y los avisos de proyectos de cada persona.</div>` : "") + (!j.correo ? `<div class="nota">Correo de salida incompleto: ${!ce.archivo ? "elige la cuenta en «Correo de salida» (abajo)"
         : `cuenta ${esc(ce.usuario)} sin contraseña guardada; escríbela en «Correo de salida»`}.
       Mientras tanto, copia el enlace que aparece junto a cada usuario y envíaselo tú.`
     : v.ok === true ? `<div class="ok" style="margin:0 0 10px">Correo de salida listo: las notificaciones salen como ${cuenta}. Último envío correcto: ${esc(v.fecha)}.`
@@ -204,7 +206,7 @@ async function cargarUsuarios() {
   $("bPruebaCorreo").onclick = async () => {
     $("pruebaMsg").textContent = "enviando…";
     try {  // se vuelve a pintar el aviso con el resultado y luego se muestra el mensaje junto al botón
-      const r = await api("/api/admin/correo_prueba", {});
+      const r = await api("api/admin/correo_prueba", {});
       await cargarUsuarios(); cargarAccesos();
       // si falló, el detalle ya está en el aviso rojo: junto al botón basta con decirlo
       $("pruebaMsg").textContent = r.ok ? r.mensaje : (document.querySelector("#avisoCorreo .falla") ? "No salió: el detalle está arriba." : r.mensaje);
@@ -236,7 +238,7 @@ async function cargarUsuarios() {
 async function cargarAccesos() {
   const p = new URLSearchParams({ correo: $("fCorreo").value, desde: $("fDesde").value, hasta: $("fHasta").value, evento: $("fEvento").value });
   [...p.keys()].forEach(k => !p.get(k) && p.delete(k));
-  const j = await api("/api/admin/accesos?" + p);
+  const j = await api("api/admin/accesos?" + p);
   ultimo = j.accesos;
   const hoy = new Date().toISOString().slice(0, 10);
   const ing = j.accesos.filter(a => a.evento === "ingreso");
@@ -266,7 +268,7 @@ $("fCorreo").onsubmit = async e => {
     servidor: $("cServidor").value, puerto: +$("cPuerto").value || 587, tenant: $("cTenant").value, cliente: $("cCliente").value };
   $("cMsg").textContent = "guardando…";
   try {
-    const r = await api("/api/admin/correo_config", cuerpo);
+    const r = await api("api/admin/correo_config", cuerpo);
     $("cClave").value = "";
     $("cMsg").innerHTML = `<div class="ok">Guardado. Las notificaciones salen como <b>${esc(r.correo_estado.remitente)}</b>. Usa «Enviar correo de prueba» para confirmar que la cuenta acepta el envío.</div>`;
     delete $("dCorreo").dataset.lleno;
@@ -276,7 +278,7 @@ $("fCorreo").onsubmit = async e => {
 $("fNuevo").onsubmit = async e => {
   e.preventDefault();
   try {
-    const j = await api("/api/admin/usuarios", { nombre: $("nNombre").value, correo: $("nCorreo").value, rol: $("nRol").value });
+    const j = await api("api/admin/usuarios", { nombre: $("nNombre").value, correo: $("nCorreo").value, rol: $("nRol").value });
     $("nMsg").innerHTML = j.enviado ? `<div class="ok">Invitación enviada a ${esc($("nCorreo").value)}.</div>` : enlaceHTML({ tipo: "invitacion", enlace: j.enlace });
     $("fNuevo").reset(); cargarUsuarios(); cargarAccesos();
   } catch (err) { $("nMsg").innerHTML = `<div class="nota">${esc(err.message)}</div>`; }
@@ -287,11 +289,11 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-acc]"); if (!b) return;
   try {
     if (b.dataset.acc === "enlace") {
-      const j = await api("/api/admin/usuario", { id: +b.dataset.id, accion: "enlace" });
+      const j = await api("api/admin/usuario", { id: +b.dataset.id, accion: "enlace" });
       if (j.enviado) alert("Enlace enviado por correo.");
     } else {
       const v = b.dataset.acc === "activo" || b.dataset.acc === "correo_proyectos" ? +b.dataset.v : b.dataset.v;
-      await api("/api/admin/usuario", { id: +b.dataset.id, cambios: { [b.dataset.acc]: v } });
+      await api("api/admin/usuario", { id: +b.dataset.id, cambios: { [b.dataset.acc]: v } });
     }
     cargarUsuarios(); cargarAccesos();
   } catch (err) { alert(err.message); }
@@ -300,18 +302,18 @@ document.addEventListener("click", async e => {
 $("tUsuarios").addEventListener("change", async e => {
   const s = e.target.closest("[data-alcance]"), p = e.target.closest("[data-permiso]");
   try {
-    if (s) await api("/api/admin/usuario", { id: +s.dataset.alcance, cambios: { alcance: s.value } });
+    if (s) await api("api/admin/usuario", { id: +s.dataset.alcance, cambios: { alcance: s.value } });
     else if (p) {
       const id = +p.dataset.id;
       const marcados = [...document.querySelectorAll(`[data-permiso][data-id="${id}"]`)].filter(x => x.checked).map(x => x.dataset.permiso);
-      await api("/api/admin/usuario", { id, cambios: { permisos: marcados } });
+      await api("api/admin/usuario", { id, cambios: { permisos: marcados } });
     } else return;
     cargarUsuarios(); cargarAccesos(); cargarActividad();
   } catch (err) { alert(err.message); cargarUsuarios(); }
 });
 // ---------- actividad del equipo: quién está en línea y qué ha creado cada uno (#51)
 async function cargarActividad() {
-  const j = await api("/api/admin/actividad");
+  const j = await api("api/admin/actividad");
   $("enLinea").innerHTML = `<p style="margin:0 0 6px"><span class="punto"></span><b>En línea ahora</b> <small class="m">(actividad en los últimos ${j.minutos} minutos)</small></p>` +
     (j.en_linea.length ? `<div class="chips">${j.en_linea.map(x => `<span class="chip" title="${esc(x.correo)} · última actividad ${esc(x.ultima_actividad)}">${esc(x.nombre)}</span>`).join("")}</div>`
       : `<small class="m">Nadie en este momento.</small>`);
@@ -335,7 +337,7 @@ const METODO = { auto: ["t-auto", "Automática"], chrome: ["t-chrome", "Desde el
 let FU = null, tPoll = null, abierta = null;
 const diasDesde = f => f ? Math.floor((Date.now() - new Date(f.replace(" ", "T"))) / 864e5) : null;
 async function cargarFuentes() {
-  FU = await api("/api/admin/fuentes");
+  FU = await api("api/admin/fuentes");
   if (!$("fuCat").options.length) $("fuCat").innerHTML = FU.categorias.map(c => `<option>${esc(c)}</option>`).join("");
   $("fFuente").style.display = $("fFuente").previousElementSibling.style.display = FU.puede_editar ? "" : "none";
   const enCurso = FU.tarea && FU.tarea.estado === "en curso";
@@ -378,29 +380,29 @@ $("tFuentes").addEventListener("click", async e => {
   try {
     if (acc === "editar") { abierta = abierta === id ? null : id; return cargarFuentes(); }
     if (acc === "cancelar") { abierta = null; return cargarFuentes(); }
-    if (acc === "guardar") { await api("/api/admin/fuentes", { id, enlace: $("edEnlace").value, notas: $("edNotas").value,
+    if (acc === "guardar") { await api("api/admin/fuentes", { id, enlace: $("edEnlace").value, notas: $("edNotas").value,
       nombre: (FU.fuentes.find(f => f.id === id) || {}).nombre, categoria: (FU.fuentes.find(f => f.id === id) || {}).categoria,
       entidad: (FU.fuentes.find(f => f.id === id) || {}).entidad }); abierta = null; }
     else if (acc === "actualizar") {
       const f = FU.fuentes.find(x => x.id === id);
       if (!confirm(`¿Descargar de nuevo «${f.nombre}»?${f.instrucciones ? "\n\n" + f.instrucciones : ""}\n\nSe hace en segundo plano; la herramienta sigue funcionando con los datos actuales mientras tanto.`)) return;
-      await api("/api/admin/fuentes", { id, accion: "actualizar" });
+      await api("api/admin/fuentes", { id, accion: "actualizar" });
     }
-    else if (acc === "marcar") await api("/api/admin/fuentes", { id, accion: "marcar" });
-    else if (acc === "eliminar") { if (!confirm("¿Quitar esta base de la lista?")) return; await api("/api/admin/fuentes", { id, accion: "eliminar" }); }
+    else if (acc === "marcar") await api("api/admin/fuentes", { id, accion: "marcar" });
+    else if (acc === "eliminar") { if (!confirm("¿Quitar esta base de la lista?")) return; await api("api/admin/fuentes", { id, accion: "eliminar" }); }
     cargarFuentes();
   } catch (err) { alert(err.message.replace(/^ValueError: /, "")); }
 });
 $("fFuente").onsubmit = async e => {
   e.preventDefault();
   try {
-    await api("/api/admin/fuentes", { nombre: $("fuNombre").value, categoria: $("fuCat").value, entidad: $("fuEnt").value,
+    await api("api/admin/fuentes", { nombre: $("fuNombre").value, categoria: $("fuCat").value, entidad: $("fuEnt").value,
       enlace: $("fuEnlace").value, notas: $("fuNotas").value });
     $("fFuente").reset(); $("fuMsg").innerHTML = `<div class="ok">Base ingresada.</div>`; cargarFuentes();
   } catch (err) { $("fuMsg").innerHTML = `<div class="nota">${esc(err.message.replace(/^ValueError: /, ""))}</div>`; }
 };
 
-api("/api/auth/yo").then(u => {
+api("api/auth/yo").then(u => {
   const admin = u.rol === "admin";
   $("yo").textContent = `${u.nombre} · ${admin ? "administrador" : "bases de datos"}`;
   if (admin) {

@@ -220,7 +220,7 @@ contenido que el GeoPackage).
   `datos/usuarios.db` ni el SharePoint real para probar.
 
 ### Variables de entorno
-`EVALUADOR_GRAPH_SECRETO`, `EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`.
+`EVALUADOR_GRAPH_SECRETO`, `EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`, `GD_PORTAL_SECRETO` (modo portal: identidad firmada por el sitio común de la Ruta de desarrollo GD; ver `motor/auth.py`).
 
 ### Próximo paso de despliegue
 Servidor en la nube (recomendado: VM en Azure + Cloudflare Tunnel/Access) con dirección fija; al tenerla,

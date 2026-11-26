@@ -5,7 +5,7 @@ param([switch]$Tunel)
 $raiz = Split-Path -Parent $PSScriptRoot
 $logs = Join-Path $raiz "datos\logs"
 New-Item -ItemType Directory -Force $logs | Out-Null
-foreach ($n in 'EVALUADOR_GRAPH_SECRETO', 'EVALUADOR_SMTP_CLAVE', 'EVALUADOR_SMTP_USUARIO', 'EVALUADOR_URL_PUBLICA', 'EVALUADOR_SHAREPOINT_URL') {
+foreach ($n in 'EVALUADOR_GRAPH_SECRETO', 'EVALUADOR_SMTP_CLAVE', 'EVALUADOR_SMTP_USUARIO', 'EVALUADOR_URL_PUBLICA', 'EVALUADOR_SHAREPOINT_URL', 'GD_PORTAL_SECRETO') {
   $v = [Environment]::GetEnvironmentVariable($n, 'User'); if ($v) { Set-Item "env:$n" $v }
 }
 if (-not (Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue)) {

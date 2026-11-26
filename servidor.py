@@ -115,6 +115,9 @@ def rondas_cercanas(poligonos, ronda):
         _cache_agua[clave] = hidrografia.cercanos(poligonos, ronda)
     return _cache_agua[clave]
 COOKIE = "evaluador_sesion"
+# Modo portal: con este secreto, el Evaluador acepta la identidad firmada por el sitio común (Worker de la Ruta de
+# desarrollo GD) y no pide su propio login. Sin él, todo funciona como siempre (login propio).
+PORTAL_SECRETO = os.environ.get("GD_PORTAL_SECRETO", "")
 URL_PUBLICA = os.environ.get("EVALUADOR_URL_PUBLICA", "").rstrip("/")  # p. ej. https://evaluador.solcor.co
 MAX_CUERPO = 150 * 1024 * 1024      # KMZ, CTL, fichas PDF, imágenes de mapa de los informes, adjuntos de soporte
 MAX_CUERPO_PUBLICO = 64 * 1024       # ingreso y recuperación: solo correo y contraseña
@@ -202,6 +205,20 @@ class Handler(BaseHTTPRequestHandler):
 
     def _usuario(self, ruta):
         """Usuario de la sesion, o None tras responder 401/redirigir."""
+        if PORTAL_SECRETO and self.headers.get("X-GD-Firma"):
+            ident = auth.verificar_portal(PORTAL_SECRETO, {k.lower(): v for k, v in self.headers.items() if k.lower().startswith("x-gd-")})
+            ip = (self.headers.get("X-Forwarded-For") or self._ip()).split(",")[0].strip()
+            u = auth.usuario_portal(ident, ip, self._agente()) if ident else None
+            if u:
+                return u
+            # firma inválida o vencida, o usuario desactivado en el Evaluador: no se cae al login propio
+            if ruta.startswith("/api/"):
+                self._send(403, {"error": "No fue posible validar tu acceso al Evaluador GD. Vuelve a abrirlo desde el inicio."})
+            else:
+                self._send(403, "<!doctype html><meta charset=utf-8><title>Evaluador GD</title><p style='font-family:sans-serif'>"
+                           "No fue posible validar tu acceso al Evaluador GD. <a href='../'>Vuelve al inicio</a> y ábrelo de nuevo.",
+                           "text/html; charset=utf-8")
+            return None
         if ruta in PUBLICAS or ruta.startswith("/marca/"):
             return {}
         u = auth.usuario_de_sesion(self._token())
@@ -223,6 +240,8 @@ class Handler(BaseHTTPRequestHandler):
         carpeta = os.path.join(BASE, "ejemplos")
         try:
             if ruta == "/login":
+                if u.get("portal"):  # en el sitio común el ingreso es el de la Ruta
+                    return self._redir("/")
                 self._pagina("login.html")
             elif ruta in ("/", "/index.html"):
                 self._pagina("index.html")
@@ -274,7 +293,7 @@ class Handler(BaseHTTPRequestHandler):
                         if x.get("enlace_pendiente"):
                             x["enlace_pendiente"]["enlace"] = con_base(x["enlace_pendiente"]["enlace"], base)
                     self._send(200, dict(usuarios=us, correo=correo.configurado(), correo_estado=correo.estado(),
-                                         url_base=base, url_fija=bool(URL_PUBLICA)))
+                                         url_base=base, url_fija=bool(URL_PUBLICA), portal=bool(u.get("portal"))))
             elif ruta == "/api/admin/accesos":
                 if self._solo_admin(u):
                     g = lambda k: (q.get(k) or [None])[0]  # noqa: E731
