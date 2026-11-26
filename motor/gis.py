@@ -18,8 +18,11 @@ import os
 import re
 import sqlite3
 import struct
+import sys
 import threading
 import zlib
+
+import bd
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 GIS_DIR = os.environ.get("GIS_SOLCOR", os.path.join(BASE, "..", "datos", "gis", "GIS_SOLCOR"))
@@ -83,6 +86,8 @@ _local = threading.local()
 
 
 def disponible():
+    if bd.NUBE:  # en la nube las cuatro bases de capas están en la tabla ev_gis.features (herramientas/migrar_a_nube.py)
+        return bd.esquema_disponible("ev_gis", "features")
     return os.path.isfile(DB_PATH)
 
 
@@ -99,6 +104,9 @@ ANLA_LINEAS = ("ANLA_Linea", "ANLA_Linea_Eval")  # cuentan si pasan a menos de b
 
 
 def _db():
+    if bd.NUBE:
+        # una sola tabla con las cuatro bases, ya sin duplicados ni capas reemplazadas (se filtran al cargarla)
+        return bd.conectar("ev_gis")
     if not hasattr(_local, "conn"):
         c = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, check_same_thread=False)
         partes, filtro = [], ""
@@ -161,6 +169,35 @@ class _Npy:
             for r in range(r0, r1 + 1):
                 f.seek(self.offset + (r * self.w + c0) * 4)
                 vals.extend(v for v in struct.unpack(f"<{n}f", f.read(4 * n)) if not math.isnan(v))
+        return vals
+
+
+class _NpyNube:
+    """Mismo lector por ventanas, sobre ev_raster.filas (una fila del raster por registro, en centésimas de %
+    como entero de 16 bits comprimido con zlib; 65535 = sin dato)."""
+
+    def __init__(self, zona, geo, w, h):
+        self.zona, self.geo, self.w, self.h = zona, geo, w, h
+
+    contiene = _Npy.contiene
+
+    def ventana(self, lon_min, lat_min, lon_max, lat_max):
+        import array
+        g = self.geo
+        c0 = max(0, int((lon_min - g["lon0"]) / g["sx"]))
+        c1 = min(self.w - 1, int((lon_max - g["lon0"]) / g["sx"]))
+        r0 = max(0, int((g["lat0"] - lat_max) / g["sy"]))
+        r1 = min(self.h - 1, int((g["lat0"] - lat_min) / g["sy"]))
+        vals = []
+        if c1 < c0 or r1 < r0:
+            return vals
+        for (datos,) in bd.conectar("ev_raster").execute(
+                "select datos from filas where zona=? and r between ? and ? order by r", (self.zona, r0, r1)):
+            fila = array.array("H")
+            fila.frombytes(zlib.decompress(bytes(datos)))
+            if sys.byteorder != "little":
+                fila.byteswap()
+            vals.extend(v / 100.0 for v in fila[c0:c1 + 1] if v != 65535)
         return vals
 
 
@@ -287,6 +324,12 @@ def pvout_mapa(ancho=1920):
 
 
 def _pendientes():
+    if "slope" not in _rasters and bd.NUBE:
+        try:
+            _rasters["slope"] = [_NpyNube(z, json.loads(g) if isinstance(g, str) else g, w, h) for z, g, w, h in
+                                 bd.conectar("ev_raster").execute("select zona, geo::text, w, h from zonas order by zona")]
+        except sqlite3.Error:
+            _rasters["slope"] = []
     if "slope" not in _rasters:
         meta_p = os.path.join(GIS_DIR, "data", "raster_meta.json")
         zonas = []

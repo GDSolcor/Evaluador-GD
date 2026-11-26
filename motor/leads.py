@@ -18,6 +18,8 @@ import json
 import os
 import re
 import sqlite3
+
+import bd
 import threading
 import time
 from datetime import date, datetime
@@ -50,7 +52,7 @@ MAX_RUTA = 235  # Windows y OneDrive fallan en silencio sobre 260; se deja marge
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH, timeout=10)
+    c = bd.conectar("ev_leads", DB_PATH, timeout=10)  # Postgres si EVALUADOR_DB_URL (motor/bd.py)
     c.row_factory = sqlite3.Row
     c.executescript("""
     create table if not exists leads(

@@ -514,6 +514,27 @@ def portal_servidor():
         p.terminate(); p.wait(10)
 
 
+@prueba
+def sql_de_sqlite_a_postgres():
+    """En la nube (motor/bd.py) el SQL de SQLite se traduce: recuadros a cajas con índice, json_extract, xmin/xmax."""
+    import bd
+    t = bd.traducir
+    q = t("SELECT layer FROM features WHERE dataset=? AND xmax>=? AND xmin<=? AND ymax>=? AND ymin<=? LIMIT ?")
+    assert "box(point(xmin_,ymin),point(xmax_,ymax)) && ev_comun.ev_caja(%s,%s,%s,%s)" in q and q.count("%s") == 6, q
+    q = t("select id from idx where x1>=? and x0<=? and y1>=? and y0<=? limit ?")
+    assert "box(point(x0,y0),point(x1,y1)) && ev_comun.ev_caja(" in q, q
+    q = t("select 1 from features where xmin<=? and xmax>=? and ymin<=? and ymax>=?")
+    assert "ev_comun.ev_caja_inv(%s,%s,%s,%s)" in q, q
+    q = t("from predios_idx i join predios p on p.id = i.id where i.xmax >= ? and i.xmin <= ? and i.ymax >= ? and i.ymin <= ?")
+    assert "box(point(i.xmin_,i.ymin),point(i.xmax_,i.ymax))" in q, q
+    q = t("select geom_json from features where json_extract(attrs_json, '$.codigo')=? and name like '50%'")
+    assert "(attrs_json::jsonb->>'codigo')=%s" in q and "ilike '50%%'" in q, q
+    assert t("select group_concat(tipo, ', ') from c") == "select string_agg((tipo)::text, ', ') from c"
+    assert t("select '%' from x", False) == "select '%' from x"
+    f = bd.Fila((1, "a"), ["id", "nombre"])
+    assert f[0] == 1 and f["nombre"] == "a" and dict(f) == {"id": 1, "nombre": "a"}
+
+
 if __name__ == "__main__":
     fallas = 0
     for f in PRUEBAS:

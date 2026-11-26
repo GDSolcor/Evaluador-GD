@@ -11,25 +11,58 @@ import sqlite3
 import struct
 import threading
 
+import bd
+
+DATOS = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "datos"))
+
+
+def clave_nube(base):
+    """Nombre de la capa en ev_shp (ruta relativa a datos/, p. ej. igac/hidrografia_100k/laguna)."""
+    return os.path.relpath(os.path.normpath(base), DATOS).replace("\\", "/")
+
+
+def existe(base):
+    if bd.NUBE:
+        try:
+            return bd.conectar("ev_shp").execute("select 1 from capas where capa=?", (clave_nube(base),)).fetchone() is not None
+        except sqlite3.Error:
+            return False
+    return os.path.isfile(base + ".shp")
+
 
 class CapaShp:
+    """En la nube (EVALUADOR_DB_URL) los registros del .shp y del .dbf, tal cual en bytes, y su recuadro están en
+    ev_shp.registros (herramientas/migrar_a_nube.py): el índice es GiST y no hay que construir nada."""
+
     def __init__(self, base, crs="wgs84"):
         self.base = base
         self.crs = crs
         self.idx_path = base + ".rtree.sqlite"
         self._local = threading.local()
-        self.progreso = 1.0 if os.path.isfile(self.idx_path) and self._indice_valido() else 0.0
         self._construyendo = False
+        if bd.NUBE:
+            self.clave = clave_nube(base)
+            self.progreso = 1.0
+        else:
+            self.progreso = 1.0 if os.path.isfile(self.idx_path) and self._indice_valido() else 0.0
         self._leer_dbf_header()
 
     # ---------------- DBF ----------------
     def _leer_dbf_header(self):
-        with open(self.base + ".dbf", "rb") as f:
-            h = f.read(32)
+        if bd.NUBE:
+            n, cab, cpg = bd.conectar("ev_shp").execute(
+                "select n, dbf_cabecera, cpg from capas where capa=?", (self.clave,)).fetchone()
+            cab = bytes(cab)
+            h, d = cab[:32], cab[32:]
             self.n, self.hl, self.rl = struct.unpack("<IHH", h[4:12])
-            d = f.read(self.hl - 32)
-        cpg = self.base + ".cpg"
-        self.enc = open(cpg).read().strip() if os.path.isfile(cpg) else "latin1"
+            self.enc = cpg or "latin1"
+        else:
+            with open(self.base + ".dbf", "rb") as f:
+                h = f.read(32)
+                self.n, self.hl, self.rl = struct.unpack("<IHH", h[4:12])
+                d = f.read(self.hl - 32)
+            cpg = self.base + ".cpg"
+            self.enc = open(cpg).read().strip() if os.path.isfile(cpg) else "latin1"
         if self.enc.upper().replace("-", "") in ("UTF8", "65001"):
             self.enc = "utf-8"
         self.campos, off = [], 1
@@ -40,6 +73,9 @@ class CapaShp:
             off += c[16]
 
     def atributos(self, i, f=None):
+        if bd.NUBE:
+            fila = bd.conectar("ev_shp").execute("select dbf from registros where capa=? and i=?", (self.clave, i)).fetchone()
+            return self._atributos_de(bytes(fila[0]) if fila else b"")
         cerrar = f is None
         f = f or open(self.base + ".dbf", "rb")
         try:
@@ -48,6 +84,9 @@ class CapaShp:
         finally:
             if cerrar:
                 f.close()
+        return self._atributos_de(r)
+
+    def _atributos_de(self, r):
         out = {}
         for nm, t, off, ln in self.campos:
             v = r[off:off + ln].decode(self.enc, "replace").strip()
@@ -118,7 +157,21 @@ class CapaShp:
             threading.Thread(target=self.construir_indice, daemon=True).start()
 
     # ---------------- consultas ----------------
+    def dbf_completo(self):
+        """Todos los registros del .dbf seguidos (sin la cabecera), como los lee catastro._lista_veredas."""
+        if bd.NUBE:
+            return b"".join(bytes(r[0]) for r in bd.conectar("ev_shp").execute(
+                "select dbf from registros where capa=? order by i", (self.clave,)))
+        with open(self.base + ".dbf", "rb") as fd:
+            fd.seek(self.hl)
+            return fd.read(self.rl * self.n)
+
     def ids_en(self, x0, y0, x1, y1, limite=3000):
+        if bd.NUBE:
+            rows = bd.conectar("ev_shp").execute(
+                "select i from registros where capa=? and x1>=? and x0<=? and y1>=? and y0<=? limit ?",
+                (self.clave, x0, x1, y0, y1, limite + 1)).fetchall()
+            return [r[0] for r in rows]
         rows = self._db().execute(
             "select id from idx where x1>=? and x0<=? and y1>=? and y0<=? limit ?", (x0, x1, y0, y1, limite + 1)
         ).fetchall()
@@ -126,6 +179,9 @@ class CapaShp:
 
     def geometria(self, i, fs=None, fx=None):
         """Partes (anillos o trazos) del registro i en el CRS nativo."""
+        if bd.NUBE:
+            fila = bd.conectar("ev_shp").execute("select shp from registros where capa=? and i=?", (self.clave, i)).fetchone()
+            return self._geometria_de(bytes(fila[0]))
         cerrar = fs is None
         fs = fs or open(self.base + ".shp", "rb")
         fx = fx or open(self.base + ".shx", "rb")
@@ -138,6 +194,10 @@ class CapaShp:
             if cerrar:
                 fs.close()
                 fx.close()
+        return self._geometria_de(c)
+
+    @staticmethod
+    def _geometria_de(c):
         tipo = struct.unpack_from("<i", c)[0]
         if tipo in (1, 11, 21):
             return "Point", [[struct.unpack_from("<2d", c, 4)]]
@@ -148,6 +208,22 @@ class CapaShp:
         return ("Polygon" if tipo in (5, 15, 25) else "LineString"), partes
 
     def leer(self, ids):
+        if bd.NUBE:
+            ids = list(ids)
+            if not ids:
+                return
+            filas = {}
+            for k in range(0, len(ids), 1000):
+                parte = ids[k:k + 1000]
+                for i, shp, dbf in bd.conectar("ev_shp").execute(
+                        f"select i, shp, dbf from registros where capa=? and i in ({','.join('?' * len(parte))})",
+                        [self.clave] + parte):
+                    filas[i] = (bytes(shp), bytes(dbf))
+            for i in ids:
+                if i in filas:
+                    tipo, partes = self._geometria_de(filas[i][0])
+                    yield i, tipo, partes, self._atributos_de(filas[i][1])
+            return
         with open(self.base + ".shp", "rb") as fs, open(self.base + ".shx", "rb") as fx, \
                 open(self.base + ".dbf", "rb") as fd:
             for i in ids:

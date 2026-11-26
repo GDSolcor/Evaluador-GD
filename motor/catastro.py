@@ -9,9 +9,10 @@ import os
 import re
 import sqlite3
 
+import bd
 import catastro_acc
 import proyeccion as P
-from capas_shp import CapaShp
+from capas_shp import CapaShp, existe as existe_shp
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DIR = os.environ.get("CATASTRO_IGAC", os.path.join(BASE, "..", "datos", "igac", "catastro",
@@ -33,7 +34,7 @@ def capas():
     if not _capas:
         for k in CAPAS:
             base = os.path.join(DIR, k)
-            if os.path.isfile(base + ".shp"):
+            if existe_shp(base):
                 _capas[k] = CapaShp(base, crs="ctm12")
     return _capas
 
@@ -198,6 +199,18 @@ def cobertura():
     global _cobertura
     if _cobertura is None:
         cache = os.path.join(DIR, "catastro_cobertura.json")
+        if bd.NUBE:
+            # copia de catastro_cobertura.json que sube herramientas/migrar_a_nube.py; si falta, se cuenta en Postgres
+            datos = bd.leer_archivo("catastro_cobertura.json")
+            if datos:
+                _cobertura = json.loads(datos)
+            else:
+                cob = {}
+                for mun, capa, n in bd.conectar("ev_cat_codigos").execute(
+                        "select substr(codigo, 1, 5), substr(capa, 1, 1), count(*) from predio where capa like '%TERRENO' group by 1, 2"):
+                    cob.setdefault(mun, {})[capa] = n
+                _cobertura = cob
+            return _cobertura
         if os.path.isfile(cache) and os.path.isfile(IDX_CODIGOS) and os.path.getmtime(cache) >= os.path.getmtime(IDX_CODIGOS):
             with open(cache, encoding="utf-8") as f:
                 _cobertura = json.load(f)
@@ -244,7 +257,7 @@ def aviso_cobertura(lon, lat, capa=None):
 
 # --------------------------------------------------------------------------- busqueda por numero predial
 IDX_CODIGOS = os.path.join(DIR, "catastro_codigos.sqlite")
-_estado_codigos = dict(progreso=1.0 if os.path.isfile(IDX_CODIGOS) else 0.0, construyendo=False)
+_estado_codigos = dict(progreso=1.0 if bd.NUBE or os.path.isfile(IDX_CODIGOS) else 0.0, construyendo=False)
 
 
 def _campos_dbf(c, nombres):
@@ -380,7 +393,7 @@ def ficha_predio(codigo=None, partes_wgs=None):
     prog = estado_indice_codigos()
     if prog < 1.0:
         return dict(encontrado=False, indexando=prog, motivo="indexando el catastro por número predial")
-    db = sqlite3.connect(f"file:{IDX_CODIGOS}?mode=ro", uri=True)
+    db = bd.conectar("ev_cat_codigos", f"file:{IDX_CODIGOS}?mode=ro", uri=True)
     try:
         fila = db.execute("select codigo, ant, capa, id from predio where codigo=? or ant=? limit 1", (cod, cod)).fetchone()
         if not fila:
@@ -424,7 +437,7 @@ def ficha_predio(codigo=None, partes_wgs=None):
 # dirección del urbano («CL 10 5 20») en las capas de nomenclatura domiciliaria. Se indexan en una tabla de texto
 # completo (FTS5 de SQLite, sin tildes) para buscarlos desde el buscador del encabezado.
 IDX_BUSQUEDA = os.path.join(DIR, "catastro_busqueda.sqlite")
-_estado_busqueda = dict(progreso=1.0 if os.path.isfile(IDX_BUSQUEDA) else 0.0, construyendo=False)
+_estado_busqueda = dict(progreso=1.0 if bd.NUBE or os.path.isfile(IDX_BUSQUEDA) else 0.0, construyendo=False)
 _SIN_NOMBRE = {"", "SIN ASIGNAR", "SIN DIRECCION", "SIN NOMBRE", "NN", "N/A"}
 
 
@@ -505,9 +518,7 @@ def _lista_veredas():
         out = []
         if v:
             f = _campos_dbf(v, ("NOMBRE", "CODIGO", "codigo_mun"))
-            with open(v.base + ".dbf", "rb") as fd:
-                fd.seek(v.hl)
-                datos = fd.read(v.rl * v.n)
+            datos = v.dbf_completo()
             for i in range(v.n):
                 r = datos[i * v.rl:(i + 1) * v.rl]
                 if r[:1] == b"*":
@@ -584,19 +595,26 @@ def buscar_predios(q, limite=15):
         if veredas:
             break
     filas, filtro = [], []
-    db = sqlite3.connect(f"file:{IDX_BUSQUEDA}?mode=ro", uri=True)
+    db = bd.conectar("ev_cat_busqueda", f"file:{IDX_BUSQUEDA}?mode=ro", uri=True)
     try:
         for filtro, resto in intentos:
             palabras = [w for w in re.findall(r"[A-Z0-9]+", resto) if w not in ("VDA", "VEREDA", "DE", "LA", "EL", "LOS", "LAS", "DEL")] \
                 or re.findall(r"[A-Z0-9]+", resto)
             if not palabras:
                 continue
-            sql = "select texto, terreno, mun, tipo from nombres where nombres match ?"
-            args = [" ".join(f'"{w}"*' for w in palabras[:6])]
+            if bd.NUBE:  # texto completo de Postgres en lugar de FTS5: todas las palabras, por prefijo
+                sql = "select texto, terreno, mun, tipo from nombres where to_tsvector('simple', texto) @@ to_tsquery('simple', ?)"
+                args = [" & ".join(f"{w.lower()}:*" for w in palabras[:6])]
+            else:
+                sql = "select texto, terreno, mun, tipo from nombres where nombres match ?"
+                args = [" ".join(f'"{w}"*' for w in palabras[:6])]
             if filtro:
                 sql += f" and mun in ({','.join('?' * len(filtro))})"
                 args += filtro
-            sql += " order by (tipo = 'urbano'), rank limit ?"
+            sql += (" order by (tipo = 'urbano'), ts_rank(to_tsvector('simple', texto), to_tsquery('simple', ?)) desc limit ?"
+                    if bd.NUBE else " order by (tipo = 'urbano'), rank limit ?")
+            if bd.NUBE:
+                args = args + [args[0]]
             try:
                 filas = db.execute(sql, args + [limite * 3]).fetchall()
             except sqlite3.OperationalError:

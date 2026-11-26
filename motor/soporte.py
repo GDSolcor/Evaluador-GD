@@ -14,6 +14,8 @@ import base64
 import json
 import os
 import sqlite3
+
+import bd
 import threading
 from datetime import datetime
 
@@ -39,7 +41,7 @@ def _carpeta():
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH, timeout=10)
+    c = bd.conectar("ev_soporte", DB_PATH, timeout=10)  # Postgres si EVALUADOR_DB_URL (motor/bd.py)
     c.row_factory = sqlite3.Row
     c.executescript("""
     create table if not exists tickets(
@@ -122,8 +124,11 @@ def crear(usuario, tipo, titulo, descripcion, contexto=None, imagenes=None):
              json.dumps(contexto or {}, ensure_ascii=False)[:20000], ahora, ahora)).lastrowid
         for k, (datos, mime, ext, nombre) in enumerate(archivos, 1):
             archivo = f"ticket{tid:04d}_{k}{ext}"
-            with open(os.path.join(_carpeta(), archivo), "wb") as f:
-                f.write(datos)
+            if bd.NUBE:  # en la nube los adjuntos van a ev_archivos.archivos
+                bd.guardar_archivo(f"soporte_adjuntos/{archivo}", datos)
+            else:
+                with open(os.path.join(_carpeta(), archivo), "wb") as f:
+                    f.write(datos)
             c.execute("insert into adjuntos(ticket_id, archivo, mime, nombre) values (?,?,?,?)", (tid, archivo, mime, nombre))
     return tid
 
@@ -216,11 +221,31 @@ def adjunto(usuario, aid):
                       (aid,)).fetchone()
     if not r or (r["usuario_id"] != usuario["id"] and usuario.get("rol") != "admin"):
         raise ValueError("El adjunto no existe.")
+    if bd.NUBE:
+        datos = bd.leer_archivo(f"soporte_adjuntos/{os.path.basename(r['archivo'])}")
+        if datos is None:
+            raise ValueError("El adjunto no existe.")
+        return datos, r["mime"], r["nombre"]
     with open(os.path.join(_carpeta(), os.path.basename(r["archivo"])), "rb") as f:
         return f.read(), r["mime"], r["nombre"]
 
 
 def rutas_adjuntos(tid):
+    if bd.NUBE:  # se copian a una carpeta temporal para adjuntarlos al correo
+        import tempfile
+        carpeta = os.path.join(tempfile.gettempdir(), "soporte_adjuntos")
+        os.makedirs(carpeta, exist_ok=True)
+        rutas = []
+        with _db() as c:
+            archivos = [r["archivo"] for r in c.execute("select archivo from adjuntos where ticket_id=? order by id", (tid,))]
+        for a in archivos:
+            datos = bd.leer_archivo(f"soporte_adjuntos/{os.path.basename(a)}")
+            if datos is not None:
+                ruta = os.path.join(carpeta, os.path.basename(a))
+                with open(ruta, "wb") as f:
+                    f.write(datos)
+                rutas.append(ruta)
+        return rutas
     with _db() as c:
         return [os.path.join(_carpeta(), r["archivo"]) for r in
                 c.execute("select archivo from adjuntos where ticket_id=? order by id", (tid,))]

@@ -71,6 +71,10 @@ if "--usuarios" in sys.argv:  # base de usuarios alternativa (pruebas)
     # y la cuenta de envío que se configure en el panel de pruebas no toca la real (datos/config_correo.json)
     os.environ["EVALUADOR_CORREO_CONFIG"] = os.environ["EVALUADOR_USUARIOS"] + ".config_correo.json"
     os.makedirs(os.path.join(os.environ["EVALUADOR_PIPELINE"], "01 Pipeline", "E1"), exist_ok=True)
+import bd  # noqa: E402
+if bd.NUBE:  # en la nube (Supabase): lo que la herramienta escribe en disco se guarda también en la base
+    bd.espejo_archivos([DATOS_USUARIO, os.path.join(DATOS_USUARIO, "fichas_modulos")])
+    bd.restaurar_estaticos(os.path.join(BASE, "datos"))
 import auth  # noqa: E402
 import catastro  # noqa: E402
 import correo  # noqa: E402

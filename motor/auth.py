@@ -16,6 +16,8 @@ import os
 import re
 import secrets
 import sqlite3
+
+import bd
 import threading
 from datetime import datetime, timedelta
 
@@ -35,7 +37,7 @@ def _ahora():
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH, timeout=10)
+    c = bd.conectar("ev_usuarios", DB_PATH, timeout=10)  # Postgres si EVALUADOR_DB_URL (motor/bd.py)
     c.row_factory = sqlite3.Row
     c.executescript("""
     create table if not exists usuarios(
