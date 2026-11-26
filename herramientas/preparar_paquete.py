@@ -28,7 +28,7 @@ DATOS = [
 ] + [f"{CAT}/{c}.{e}" for c in ("R_TERRENO", "U_TERRENO", "R_VEREDA", "U_MANZANA")
      for e in ("shp", "shx", "dbf", "cpg", "prj", "rtree.sqlite")] + [f"{CAT}/catastro_codigos.sqlite"]
 EXCLUIR_EXT = (".tmp", ".pyc", ".zip", ".lock")
-EXCLUIR_NOMBRES = {"__pycache__", "usuarios.db", "evaluaciones.db", "config_correo.json", ".claude"}
+EXCLUIR_NOMBRES = {"__pycache__", "usuarios.db", "evaluaciones.db", "config_correo.json", "correo_secreto.bin", "correo_verificacion.json", ".claude"}
 
 
 def archivos():

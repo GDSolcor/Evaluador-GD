@@ -68,6 +68,8 @@ if "--usuarios" in sys.argv:  # base de usuarios alternativa (pruebas)
     # ni ningún otro correo (invitaciones, recuperación, prueba): quedan como .eml en %TEMP%\evaluador_correos_prueba.
     # El 3-nov una invitación de prueba salió por Gmail hacia una dirección ficticia (ticket #45).
     os.environ["EVALUADOR_SIN_CORREO"] = "1"
+    # y la cuenta de envío que se configure en el panel de pruebas no toca la real (datos/config_correo.json)
+    os.environ["EVALUADOR_CORREO_CONFIG"] = os.environ["EVALUADOR_USUARIOS"] + ".config_correo.json"
     os.makedirs(os.path.join(os.environ["EVALUADOR_PIPELINE"], "01 Pipeline", "E1"), exist_ok=True)
 import auth  # noqa: E402
 import catastro  # noqa: E402
@@ -456,10 +458,21 @@ class Handler(BaseHTTPRequestHandler):
                                            f"Hola {u['nombre']},\n\nEl envío de correos del Evaluador GD funciona.\n")
                         auth.registrar(u["correo"], "correo_prueba", ip, ag, "enviado" if ok else "correo no configurado")
                         self._send(200, {"ok": ok, "mensaje": f"Correo de prueba enviado a {u['correo']}." if ok else
-                                         "El correo no está configurado todavía (falta el archivo o la contraseña de aplicación)."})
+                                         "El correo no está configurado todavía (faltan datos en datos/config_correo.json o el secreto en la variable de entorno)."})
                     except Exception as e:
                         auth.registrar(u["correo"], "correo_fallido", ip, ag, f"{type(e).__name__}: {e}"[:200])
-                        self._send(200, {"ok": False, "mensaje": f"Gmail rechazó el envío: {type(e).__name__}: {e}"})
+                        self._send(200, {"ok": False, "mensaje": f"El servidor de correo rechazó el envío: {type(e).__name__}: {e}"})
+            elif ruta == "/api/admin/correo_config":  # cuenta de envío de las notificaciones
+                if self._solo_admin(u):
+                    req = self._json(data)
+                    try:
+                        est = correo.guardar(req, u["correo"])
+                    except ValueError as e:
+                        self._send(400, {"error": str(e)})
+                    else:
+                        auth.registrar(u["correo"], "correo_configurado", ip, ag,
+                                       f"{est['metodo']}: {est['usuario']} como {est['remitente']}"[:200])
+                        self._send(200, {"ok": True, "correo": correo.configurado(), "correo_estado": est})
             elif ruta == "/api/admin/usuario":
                 if self._solo_admin(u):
                     req = self._json(data)
@@ -848,7 +861,7 @@ def main():
     if catastro.disponible():
         catastro.estado_indice_codigos()  # si falta el índice por número predial, se arma en segundo plano
     if not correo.configurado():
-        print("Aviso: correo no configurado (datos/config_correo.json + EVALUADOR_SMTP_CLAVE); "
+        print("Aviso: correo no configurado (datos/config_correo.json + EVALUADOR_GRAPH_SECRETO o EVALUADOR_SMTP_CLAVE); "
               "los enlaces de acceso se verán en el panel de administración.")
     if "--sin-navegador" not in sys.argv:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
