@@ -16,6 +16,8 @@ import os
 import re
 import secrets
 import sqlite3
+
+import bd
 import threading
 from datetime import datetime, timedelta
 
@@ -35,7 +37,7 @@ def _ahora():
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH, timeout=10)
+    c = bd.conectar("ev_usuarios", DB_PATH, timeout=10)  # Postgres si EVALUADOR_DB_URL (motor/bd.py)
     c.row_factory = sqlite3.Row
     c.executescript("""
     create table if not exists usuarios(
@@ -170,6 +172,66 @@ def ingresar(correo, clave, ip="", agente=""):
         c.execute("delete from sesiones where expira < ?", (ahora.isoformat(sep=" "),))
     registrar(correo, "ingreso", ip, agente)
     return token, SESION_HORAS * 3600
+
+
+# ---------------------------------------------------------------- modo portal (sitio común con la Ruta de desarrollo GD)
+# El sitio común (Worker de la Ruta) autentica a la persona y reenvía /evaluador/* con su identidad firmada:
+# X-GD-Usuario (correo), X-GD-Nombre (codificado como URI), X-GD-Rol (usuario|admin), X-GD-Fecha (segundos Unix)
+# y X-GD-Firma = HMAC-SHA256 hex de «v1⏎fecha⏎correo⏎nombre⏎rol» (una línea por campo) con el secreto compartido GD_PORTAL_SECRETO.
+PORTAL_VENTANA_S = 120  # tolerancia de la fecha de la firma (relojes distintos y reintentos)
+
+
+def firma_portal(secreto, fecha, correo, nombre, rol):
+    texto = "\n".join(["v1", fecha, correo, nombre, rol])
+    return hmac.new(secreto.encode("utf-8"), texto.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verificar_portal(secreto, cab, ahora_s=None):
+    """Identidad del portal si la firma es válida y reciente: dict(correo, nombre, rol); si no, None.
+    `cab` es un dict con las cabeceras X-GD-* en minúsculas."""
+    from urllib.parse import unquote
+    correo, nombre, rol = cab.get("x-gd-usuario", ""), cab.get("x-gd-nombre", ""), cab.get("x-gd-rol", "")
+    fecha, firma = cab.get("x-gd-fecha", ""), cab.get("x-gd-firma", "")
+    if not (secreto and correo and fecha and firma and rol in ("usuario", "admin") and fecha.isdigit()):
+        return None
+    ahora_s = int(datetime.now().timestamp()) if ahora_s is None else ahora_s
+    if abs(ahora_s - int(fecha)) > PORTAL_VENTANA_S:
+        return None
+    if not hmac.compare_digest(firma_portal(secreto, fecha, correo, nombre, rol), firma.lower()):
+        return None
+    correo = correo.strip().lower()
+    if not _RE_CORREO.match(correo):
+        return None
+    return dict(correo=correo, nombre=unquote(nombre).strip() or correo, rol=rol)
+
+
+def usuario_portal(ident, ip="", agente=""):
+    """Usuario del Evaluador para una identidad del portal: lo crea si no existe (conserva autoría e historial,
+    cruzando por correo) y toma el rol que asignó el portal. Un usuario desactivado aquí sigue sin acceso."""
+    correo, ahora = ident["correo"], _ahora()
+    nuevo = False
+    with _lock, _db() as c:
+        u = c.execute("select * from usuarios where correo=?", (correo,)).fetchone()
+        if not u:
+            c.execute("insert into usuarios(correo, nombre, rol, creado, ultimo_ingreso) values (?,?,?,?,?)",
+                      (correo, ident["nombre"], ident["rol"], ahora.isoformat(sep=" "), ahora.isoformat(sep=" ")))
+            nuevo = True
+        else:
+            if not u["activo"]:
+                return None
+            cambios = {}
+            for k in ("rol", "nombre"):  # el sitio común es quien mantiene el nombre y el rol
+                if u[k] != ident[k]:
+                    cambios[k] = ident[k]
+            # «último ingreso»: como mucho una escritura cada 30 minutos
+            if not u["ultimo_ingreso"] or u["ultimo_ingreso"] < (ahora - timedelta(minutes=30)).isoformat(sep=" "):
+                cambios["ultimo_ingreso"] = ahora.isoformat(sep=" ")
+            if cambios:
+                c.execute(f"update usuarios set {', '.join(k + '=?' for k in cambios)} where id=?", (*cambios.values(), u["id"]))
+        u = c.execute("select * from usuarios where correo=?", (correo,)).fetchone()
+    if nuevo:
+        registrar(correo, "usuario_creado", ip, agente, f"por el portal · rol {ident['rol']}")
+    return dict(_publico(u), portal=True)
 
 
 def usuario_de_sesion(token):

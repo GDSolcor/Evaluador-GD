@@ -70,7 +70,7 @@ mapa (Leaflet), la TRM del día y, si se activa, el túnel HTTPS para entrar des
   pública) de 12 h, 5 fallos en 15 min bloquean, tope de tamaño del cuerpo HTTP, límite de recuperaciones.
 - **Actividad:** historial de ingresos y cambios; `sesiones.ultima_actividad` → «en línea» (5 min) y
   métricas en `/api/admin/actividad`.
-- **Correo:** SMTP de Gmail (`datos/config_correo.json`, clave en la variable `EVALUADOR_SMTP_CLAVE`).
+- **Correo:** cuenta elegida en el panel (Usuarios → Correo de salida). Hoy: **Outlook clásico de este PC** con `m.bayona@solcor.com.co` (`herramientas/enviar_outlook.ps1`), porque el tenant de Solcor tiene apagado el SMTP autenticado. Para la nube: Microsoft Graph desde `tramites@solcor.com.co` (pendiente de TI). El panel solo marca «listo» tras un envío exitoso (`datos/correo_verificacion.json`).
 
 ## 3. Módulos
 
@@ -220,9 +220,35 @@ contenido que el GeoPackage).
   `datos/usuarios.db` ni el SharePoint real para probar.
 
 ### Variables de entorno
-`EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`.
+`EVALUADOR_GRAPH_SECRETO`, `EVALUADOR_SMTP_CLAVE`, `EVALUADOR_URL_PUBLICA`, `EVALUADOR_SIN_CORREO`, `EVALUADOR_FUENTES`, `GD_PORTAL_SECRETO` (modo portal: identidad firmada por el sitio común de la Ruta de desarrollo GD; ver `motor/auth.py`).
 
-### Próximo paso de despliegue
-Servidor en la nube (recomendado: VM en Azure + Cloudflare Tunnel/Access) con dirección fija; al tenerla,
-definir `EVALUADOR_URL_PUBLICA` y reenviar las invitaciones pendientes. La distribución por SharePoint
-(`preparar_paquete.py`) está postergada.
+`EVALUADOR_DB_URL`: cadena de conexión de Postgres (Supabase). Si está definida, el Evaluador lee y escribe en
+Postgres en lugar de los archivos de `datos/` (ver «En la nube»).
+
+### En la nube (Supabase + contenedor detrás de la Ruta)
+- **Datos**: `herramientas/migrar_a_nube.py` sube a Postgres lo que la herramienta usa al funcionar, cada base en
+  su esquema `ev_*` (no se mezcla con las tablas de la Ruta, que están en `public`):
+
+  | Esquema | Contenido |
+  |---|---|
+  | `ev_gis.features` | las cuatro bases de capas (GIS Solcor, red de los OR, complementarias, autoridades ambientales), sin los duplicados que filtraba `gis._db()`; índice GiST por recuadro |
+  | `ev_shp` | catastro IGAC (R/U_TERRENO, R_VEREDA, U_MANZANA) e hidrografía 1:100.000: cada registro del .shp/.dbf en bytes |
+  | `ev_hidro` | tablas del GeoPackage de hidrografía y sus R-tree |
+  | `ev_cat_codigos`, `ev_cat_busqueda` | índices del catastro por número predial y por nombre (texto completo de Postgres en lugar de FTS5) |
+  | `ev_cat_acc`, `ev_cat_antioquia`, `ev_cat_amco`, `ev_cat_armenia` | catastros descargados de cada gestor |
+  | `ev_raster` | pendientes (una fila del ráster por registro, centésimas de % en 16 bits) |
+  | `ev_usuarios`, `ev_evaluaciones`, `ev_leads`, `ev_soporte` | bases de negocio |
+  | `ev_archivos` | adjuntos de soporte, PVOUT, conteos y los archivos que la herramienta escribe (módulos, fuentes, correo) |
+
+  Se corre desde este PC: `EVALUADOR_DB_URL` en el entorno (nunca en un archivo) y
+  `python herramientas/migrar_a_nube.py`. Es reanudable; `--estado` muestra lo cargado y su tamaño.
+- **Código**: `motor/bd.py` hace que los módulos sigan con su SQL de SQLite: traduce los `?`, `json_extract`,
+  `group_concat`, `pragma table_info`, los recuadros (`xmax>=? AND xmin<=? …` → cajas con índice GiST) y renombra
+  `xmin`/`xmax` (columnas de sistema en Postgres) a `xmin_`/`xmax_`.
+- **Imagen**: `Dockerfile`; el flujo `.github/workflows/imagen.yml` la publica en `ghcr.io/<dueño>/evaluador-gd` en cada
+  cambio de `main`. Variables del contenedor: `EVALUADOR_DB_URL`, `GD_PORTAL_SECRETO`, `EVALUADOR_URL_PUBLICA`.
+- **Entrada**: la Ruta (Cloudflare Worker) la publica en `/evaluador` con el ingreso único: secreto `EVALUADOR_ORIGEN`
+  con la dirección del contenedor y el mismo `GD_PORTAL_SECRETO` en los dos lados.
+- **Limitaciones en la nube**: crear las carpetas del proyecto en SharePoint al pasar un lead a E1 y el envío de
+  correo por PowerShell dependen de Windows y de la carpeta sincronizada de OneDrive; en el contenedor esas dos
+  acciones no están disponibles (la Ruta ya maneja SharePoint por Microsoft Graph).

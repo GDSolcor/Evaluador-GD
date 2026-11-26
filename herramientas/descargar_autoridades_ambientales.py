@@ -27,6 +27,7 @@ import sqlite3
 import sys
 import time
 import urllib.parse
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from descargar_red_arcgis import Cliente, Cortes, descargar_capa  # noqa: E402
@@ -276,15 +277,44 @@ def _listo(fuente, clave):
 
 
 # ------------------------------------------------------------------------------------------- Corpoboyacá (WFS)
+class CapaRota(Exception):
+    """El GeoServer responde con un error propio (excepción de Java) aun pidiendo una sola entidad: no es una caída
+    del servicio sino una capa dañada en el origen, y reintentar no sirve (#47: Zonificación Áreas Protegidas)."""
+
+
+def _orden_wfs(capa):
+    """Atributo para sortBy si la capa no tiene llave primaria, o None. GeoServer no pagina con startIndex una tabla
+    sin llave («Cannot do natural order without a primary key») y responde XML en vez de JSON; el cliente lo tomaba
+    como caída del servicio y paraba la descarga en «Otras Fuentes Hídricas» (#47)."""
+    base = {"service": "WFS", "version": "1.0.0", "request": "GetFeature", "typeName": capa}
+    url = GEOSERVER + "?" + urllib.parse.urlencode({**base, "outputFormat": "application/json", "maxFeatures": 1, "startIndex": 0})
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=90) as r:
+        txt = r.read().decode("utf-8", "replace")
+    if "natural order" not in txt:
+        if "ExceptionReport" in txt[:400]:
+            m = re.search(r"<(?:ows:)?(?:ServiceException|ExceptionText)(?:\s[^>]*)?>\s*([^<]+)", txt)
+            raise CapaRota((m.group(1).strip() if m else "error del servidor")[:120])
+        return None
+    url = GEOSERVER + "?" + urllib.parse.urlencode({**base, "outputFormat": "application/json", "maxFeatures": 1})
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"}), timeout=90) as r:
+        props = (json.load(r).get("features") or [{}])[0].get("properties") or {}
+    return next(iter(props), None)
+
+
 def _wfs(cli, capa, carpeta, pagina=2000):
     """Todas las entidades de una capa WFS en lon/lat, por páginas (startIndex) con caché."""
     clave = re.sub(r"[^A-Za-z0-9_-]", "_", capa)
     feats, i = [], 0
+    orden = None if os.path.isfile(os.path.join(carpeta, clave, f"{0:07d}.json")) else _orden_wfs(capa)
+    if orden:
+        print(f"    capa sin llave primaria: se pagina ordenando por {orden}", flush=True)
     while True:
         destino = os.path.join(carpeta, clave, f"{i:07d}.json")
-        d = cli.json(GEOSERVER, {"service": "WFS", "version": "1.0.0", "request": "GetFeature", "typeName": capa,
-                                 "outputFormat": "application/json", "srsName": "EPSG:4326", "maxFeatures": pagina,
-                                 "startIndex": i}, destino)
+        params = {"service": "WFS", "version": "1.0.0", "request": "GetFeature", "typeName": capa,
+                  "outputFormat": "application/json", "srsName": "EPSG:4326", "maxFeatures": pagina, "startIndex": i}
+        if orden:
+            params["sortBy"] = orden
+        d = cli.json(GEOSERVER, params, destino)
         lote = d.get("features") or []
         feats += lote
         i += len(lote)
@@ -297,17 +327,25 @@ def _wfs(cli, capa, carpeta, pagina=2000):
 def corpoboyaca(sin_predial=False, rehacer=False):
     cli = Cliente(1.0)
     carpeta = os.path.join(CACHE, "corpoboyaca")
+    omitidas = []
     for capa, titulo, ds in CORPOBOYACA:
         if sin_predial and ds == PR:
             continue
         if not rehacer and _listo("corpoboyaca", capa):
             continue
         print(f"corpoboyaca · {titulo} ({capa})…", flush=True)
-        feats = _wfs(cli, capa, carpeta)
+        try:
+            feats = _wfs(cli, capa, carpeta)
+        except CapaRota as e:
+            print(f"  OMITIDA: el servidor de origen no la entrega ({e}); se sigue con las demás", flush=True)
+            omitidas.append(titulo)
+            continue
         fecha = time.strftime("%Y-%m-%d")
         filas = _filas_geojson(feats, ds, titulo, FUENTE["corpoboyaca"], fecha)
         _guardar("corpoboyaca", capa, ds, titulo, filas, fecha)
         print(f"  {len(feats)} elementos -> {len(filas)} geometrías", flush=True)
+    if omitidas:
+        print(f"Capas omitidas por error del servidor de origen ({len(omitidas)}): " + "; ".join(omitidas), flush=True)
 
 
 # ------------------------------------------------------------------------------------------- CAR (ArcGIS Hub)

@@ -12,6 +12,8 @@ Una evaluación puede quedar ligada a un lead (motor/leads.py).
 import json
 import os
 import sqlite3
+
+import bd
 import threading
 from datetime import datetime
 
@@ -22,7 +24,7 @@ MAX_BYTES = 20 * 1024 * 1024
 
 
 def _db():
-    c = sqlite3.connect(DB_PATH, timeout=10)
+    c = bd.conectar("ev_evaluaciones", DB_PATH, timeout=10)  # Postgres si EVALUADOR_DB_URL (motor/bd.py)
     c.row_factory = sqlite3.Row
     c.executescript("""
     create table if not exists evaluaciones(

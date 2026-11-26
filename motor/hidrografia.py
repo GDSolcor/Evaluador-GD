@@ -17,8 +17,9 @@ import sqlite3
 import struct
 import threading
 
+import bd
 import proyeccion as P
-from capas_shp import CapaShp
+from capas_shp import CapaShp, existe as existe_shp
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 GPKG = os.path.join(BASE, "..", "datos", "igac", "hidrografia_gdb", "Hidrografia_completa.gpkg")
@@ -57,6 +58,8 @@ _shp = {}
 
 
 def _gpkg():
+    if bd.NUBE:  # tablas del GeoPackage en el esquema ev_hidro (herramientas/migrar_a_nube.py)
+        return bd.conectar("ev_hidro")
     if not hasattr(_local, "g"):
         _local.g = sqlite3.connect(f"file:{GPKG}?mode=ro", uri=True, check_same_thread=False)
     return _local.g
@@ -65,13 +68,15 @@ def _gpkg():
 def _capa_shp(archivo):
     if archivo not in _shp:
         base = os.path.join(SHP_DIR, archivo)
-        _shp[archivo] = CapaShp(base, crs="wgs84") if os.path.isfile(base + ".shp") else None
+        _shp[archivo] = CapaShp(base, crs="wgs84") if existe_shp(base) else None
     return _shp[archivo]
 
 
 def disponible_capa(cid):
     nombre, color, zoom, origen, fuente, _ = CAPAS[cid]
-    return os.path.isfile(GPKG) if origen == "gpkg" else _capa_shp(fuente) is not None
+    if origen == "gpkg":
+        return bd.esquema_disponible("ev_hidro", fuente) if bd.NUBE else os.path.isfile(GPKG)
+    return _capa_shp(fuente) is not None
 
 
 # --------------------------------------------------------------------------- WKB (GeoPackage)

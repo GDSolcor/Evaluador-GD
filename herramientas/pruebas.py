@@ -109,6 +109,41 @@ def limite_de_gd_recorta_sin_recortar_arriendo():
 
 
 @prueba
+def layout_girado_y_alineado_al_poligono():
+    # ticket #54: un lote rectangular girado 30° cabe mejor con las mesas giradas igual
+    import math
+    import evaluador
+    lon0, lat0, m = -73.08, 5.78, 1 / 111320.0
+    mx = m / math.cos(math.radians(lat0))  # grados de longitud por metro
+    a = math.radians(30)
+    esquinas = [(0, 0), (300, 0), (300, 60), (0, 60)]
+    coords = [[lon0 + (x * math.cos(a) - y * math.sin(a)) * mx, lat0 + (x * math.sin(a) + y * math.cos(a)) * m]
+              for x, y in esquinas]
+    capas = evaluador.desde_poligonos([{"nombre": "Lote", "coords": coords}])["capas"]
+    sur = evaluador.evaluar(capas, {})
+    assert sur["resumen"]["azimut"] == 180.0
+    girado = evaluador.evaluar(capas, {"azimut": 150})
+    assert girado["params"]["azimut"] == 150.0 and girado["resumen"]["mesas"] > sur["resumen"]["mesas"] * 1.15
+    # las mesas giradas conservan su tamaño y su ángulo
+    c = girado["mesas"][0]["coords"]
+    ancho = math.hypot((c[1][0] - c[0][0]) / mx, (c[1][1] - c[0][1]) / m)
+    rumbo = math.degrees(math.atan2((c[1][0] - c[0][0]) / mx, (c[1][1] - c[0][1]) / m)) % 180
+    assert abs(rumbo - 60) < 0.5, rumbo
+    assert abs(ancho - girado["mesa"]["ancho"]) < 0.05, ancho
+    auto = evaluador.evaluar(capas, {"alinear": True})
+    assert abs(auto["params"]["azimut"] - 150.0) <= 1.0, auto["resumen"]["azimut_candidatos"]
+    assert auto["resumen"]["mesas"] >= girado["resumen"]["mesas"] - 2
+    assert "alinear" not in auto["params"]
+    # en Mavalle girar casi no suma mesas: «Alinear» deja el sur (no cambia energía por 1 % de mesas)
+    res, _ = _mavalle()
+    assert evaluador.evaluar(res["capas"], {"alinear": True})["params"]["azimut"] == 180.0
+    # fuera de rango se limita al semicírculo sur; vacío o texto -> 180
+    assert evaluador.evaluar(capas, {"azimut": 20})["params"]["azimut"] == 90.0
+    assert evaluador.evaluar(capas, {"azimut": "x"})["params"]["azimut"] == 180.0
+    assert evaluador.evaluar(capas, {"azimut": ""})["params"]["azimut"] == 180.0
+
+
+@prueba
 def reparto_por_filas():
     import evaluador
     assert evaluador._reparto_por_filas([10] * 6, 2, 30) == [3, 3]
@@ -391,6 +426,113 @@ def gis_y_red_responden():
     assert g.get("municipio") and g.get("semaforo") in ("rojo", "ambar", "verde"), g.get("error")
     assert isinstance(red.cercano(-73.36, 5.535), list)
     assert json.dumps(red.arbol())
+
+
+@prueba
+def portal_identidad_firmada():
+    """Sitio común (Worker de la Ruta): la identidad firmada crea o reconoce al usuario y respeta los desactivados."""
+    import auth
+    sec, t = "secreto-de-prueba", 1_800_000_000
+    def cab(correo="luis@prueba.co", nombre="Luis%20P%C3%A9rez", rol="usuario", fecha=t, firma=None):
+        f = str(fecha)
+        return {"x-gd-usuario": correo, "x-gd-nombre": nombre, "x-gd-rol": rol, "x-gd-fecha": f,
+                "x-gd-firma": firma or auth.firma_portal(sec, f, correo, nombre, rol)}
+    ident = auth.verificar_portal(sec, cab(), t + 30)
+    assert ident == dict(correo="luis@prueba.co", nombre="Luis Pérez", rol="usuario"), ident
+    assert auth.verificar_portal(sec, cab(), t + 500) is None                      # vencida
+    assert auth.verificar_portal("otro", cab(), t) is None                         # otro secreto
+    falsa = cab(); falsa["x-gd-rol"] = "admin"
+    assert auth.verificar_portal(sec, falsa, t) is None                            # rol alterado
+    assert auth.verificar_portal(sec, cab(rol="jefe"), t) is None                  # rol desconocido
+    assert auth.verificar_portal("", cab(), t) is None                             # sin secreto no hay portal
+    u = auth.usuario_portal(ident)
+    assert u["portal"] and u["correo"] == "luis@prueba.co" and u["nombre"] == "Luis Pérez" and u["rol"] == "usuario"
+    u2 = auth.usuario_portal(dict(ident, rol="admin"))                             # el rol lo decide el portal
+    assert u2["id"] == u["id"] and u2["rol"] == "admin"
+    auth.actualizar_usuario(u["id"], {"activo": 0}, "admin@prueba.co")
+    assert auth.usuario_portal(ident) is None                                      # desactivado aquí: sin acceso
+
+
+@prueba
+def paginas_con_direcciones_relativas():
+    """Detrás de /evaluador/ las páginas no pueden pedir «/api/...»: en el sitio común esas rutas son de la Ruta."""
+    import re
+    malas = []
+    for f in glob.glob(os.path.join(RAIZ, "web", "*.html")):
+        with open(f, encoding="utf-8") as fh:
+            for n, linea in enumerate(fh, 1):
+                if re.search(r"""["'`(]/(api/|marca/|login\b|manual\b|admin\b|ejemplos/)|href=["']/["']|location\.href = ["']/["']""", linea):
+                    malas.append(f"{os.path.basename(f)}:{n}")
+    assert not malas, malas
+
+
+@prueba
+def portal_servidor():
+    """El servidor con GD_PORTAL_SECRETO acepta la identidad firmada, rechaza una falsa y sin firma pide su login."""
+    import socket
+    import subprocess
+    import time
+    import urllib.error
+    import urllib.request
+    import auth
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0)); puerto = s.getsockname()[1]
+    sec = "secreto-servidor-prueba"
+    env = dict(os.environ, GD_PORTAL_SECRETO=sec)
+    p = subprocess.Popen([sys.executable, os.path.join(RAIZ, "servidor.py"), "--puerto", str(puerto), "--sin-navegador",
+                          "--usuarios", os.path.join(TMP, "usuarios_portal.db")],
+                         cwd=RAIZ, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    def pedir(ruta, cab=None):
+        req = urllib.request.Request(f"http://127.0.0.1:{puerto}{ruta}", headers=cab or {})
+        class SinRedir(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k):
+                return None
+        try:
+            with urllib.request.build_opener(SinRedir).open(req, timeout=10) as r:
+                return r.status, r.read().decode("utf-8", "replace"), r.headers
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace"), e.headers
+    try:
+        for _ in range(100):
+            try:
+                pedir("/api/auth/estado"); break
+            except OSError:
+                time.sleep(0.2)
+        f = str(int(time.time()))
+        firma = auth.firma_portal(sec, f, "maria@prueba.co", "Mar%C3%ADa", "admin")
+        cab = {"X-GD-Usuario": "maria@prueba.co", "X-GD-Nombre": "Mar%C3%ADa", "X-GD-Rol": "admin", "X-GD-Fecha": f, "X-GD-Firma": firma}
+        st, cuerpo, _ = pedir("/api/auth/yo", cab)
+        yo = json.loads(cuerpo)
+        assert st == 200 and yo["correo"] == "maria@prueba.co" and yo["nombre"] == "María" and yo["portal"], (st, cuerpo)
+        st, _, h = pedir("/login", cab)
+        assert st == 302 and h["Location"] == "/", st                              # en el portal no hay login propio
+        st, _, _ = pedir("/api/auth/yo", dict(cab, **{"X-GD-Rol": "usuario"}))    # firma que no corresponde
+        assert st == 403, st
+        st, _, _ = pedir("/api/auth/yo")                                          # sin firma: login propio, como siempre
+        assert st == 401, st
+    finally:
+        p.terminate(); p.wait(10)
+
+
+@prueba
+def sql_de_sqlite_a_postgres():
+    """En la nube (motor/bd.py) el SQL de SQLite se traduce: recuadros a cajas con índice, json_extract, xmin/xmax."""
+    import bd
+    t = bd.traducir
+    q = t("SELECT layer FROM features WHERE dataset=? AND xmax>=? AND xmin<=? AND ymax>=? AND ymin<=? LIMIT ?")
+    assert "box(point(xmin_,ymin),point(xmax_,ymax)) && ev_comun.ev_caja(%s,%s,%s,%s)" in q and q.count("%s") == 6, q
+    q = t("select id from idx where x1>=? and x0<=? and y1>=? and y0<=? limit ?")
+    assert "box(point(x0,y0),point(x1,y1)) && ev_comun.ev_caja(" in q, q
+    q = t("select 1 from features where xmin<=? and xmax>=? and ymin<=? and ymax>=?")
+    assert "ev_comun.ev_caja_inv(%s,%s,%s,%s)" in q, q
+    q = t("from predios_idx i join predios p on p.id = i.id where i.xmax >= ? and i.xmin <= ? and i.ymax >= ? and i.ymin <= ?")
+    assert "box(point(i.xmin_,i.ymin),point(i.xmax_,i.ymax))" in q, q
+    q = t("select geom_json from features where json_extract(attrs_json, '$.codigo')=? and name like '50%'")
+    assert "(attrs_json::jsonb->>'codigo')=%s" in q and "ilike '50%%'" in q, q
+    assert t("select group_concat(tipo, ', ') from c") == "select string_agg((tipo)::text, ', ') from c"
+    assert t("select '%' from x", False) == "select '%' from x"
+    f = bd.Fila((1, "a"), ["id", "nombre"])
+    assert f[0] == 1 and f["nombre"] == "a" and dict(f) == {"id": 1, "nombre": "a"}
 
 
 if __name__ == "__main__":

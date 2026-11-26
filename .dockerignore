@@ -1,0 +1,17 @@
+# La imagen lleva solo el código: los datos van en Postgres (herramientas/migrar_a_nube.py)
+.git
+.github
+__pycache__
+**/__pycache__
+*.pyc
+*.log
+.env
+datos/*
+!datos/modulos.json
+!datos/plantillas/
+!datos/config_correo.ejemplo.json
+ejemplos
+herramientas/bin
+*.md
+*.html
+*.bat

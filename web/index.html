@@ -7,7 +7,7 @@
 <meta name="copyright" content="© 2026 Manuel Antonio Bayona Cely. Todos los derechos reservados.">
 <!-- Evaluador GD · Autor y desarrollador: Manuel Antonio Bayona Cely · © 2026. Todos los derechos reservados. Ver LICENCIA.md -->
 <title>Evaluador GD · Solcor</title>
-<link rel="icon" type="image/svg+xml" href="/marca/icono.svg">
+<link rel="icon" type="image/svg+xml" href="marca/icono.svg">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
@@ -160,6 +160,8 @@
   .tab.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   .fila-in { display: flex; gap: 6px; } .fila-in .btn2 { padding: 5px 12px; white-space: nowrap; }
   .fila-in select { min-width: 0; }
+  .azi { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .azi input[type=range] { flex: 1 1 100%; margin: 4px 0 0; }
+  .grid2 .azi input[data-p] { width: 84px; flex: none; } .azi .btn2 { padding: 5px 9px; white-space: nowrap; }
   .mesa-res { font-size: 11.5px; color: var(--muted); background: var(--bg); border-radius: 7px; padding: 5px 8px; line-height: 1.45; }
   .mesa-res b { color: var(--ink); }
   .mesa-mini { display: inline-grid; gap: 1px; vertical-align: middle; margin-right: 6px; background: #0d2436; padding: 1px; border-radius: 2px; }
@@ -432,7 +434,7 @@
 </head>
 <body>
 <header>
-  <img class="logo" src="/marca/solcor_negativo.png" alt="Solcor Colombia">
+  <img class="logo" src="marca/solcor_negativo.png" alt="Solcor Colombia">
   <h1>Evaluador GD<small id="hdrVersion">v2</small></h1>
   <span class="sep"></span>
   <button class="btn2" id="btnPanel" title="Mostrar u ocultar el panel de datos" aria-label="Mostrar u ocultar el panel de datos">☰</button>
@@ -455,10 +457,11 @@
     <button class="usr-btn" id="usrBtn"><span class="av" id="usrAv">·</span><span id="usrNom">…</span> ▾</button>
     <div class="usr-menu" id="usrMenu" hidden>
       <div class="usr-info" id="usrInfo"></div>
-      <a href="/admin" id="lnkAdmin" hidden>Administración y accesos</a>
+      <a href="admin" id="lnkAdmin" hidden>Administración y accesos</a>
       <a href="#" id="lnkGuia">Guía interactiva (2 minutos)</a>
-      <a href="/manual" target="_blank" rel="noopener">Manual de uso</a>
+      <a href="manual" target="_blank" rel="noopener">Manual de uso</a>
       <a href="#" id="lnkAcerca">Acerca del Evaluador GD</a>
+      <a href="../#/inicio" id="lnkInicio" hidden>← Volver al inicio</a>
       <a href="#" id="lnkSalir">Cerrar sesión</a>
     </div>
   </div>
@@ -670,6 +673,12 @@
       <label>Inclinación (°)<input data-p="inclinacion" type="number" step="0.5"></label>
       <label class="full">Orientación del módulo
         <select data-p="orientacion"><option value="vertical">Vertical · retrato (lado largo N-S, "V")</option><option value="horizontal">Horizontal · paisaje (lado largo E-O, "H")</option></select></label>
+      <label class="full" title="Hacia dónde miran los módulos, en grados desde el norte en sentido horario: 180° = sur (filas este-oeste). Gira el layout para aprovechar lotes inclinados. «Alinear» prueba el sur y los lados más largos del área construible y deja el que más mesas da.">Orientación del layout · azimut (°)
+        <div class="azi"><input type="range" id="aziRango" min="90" max="270" step="1" value="180">
+          <input data-p="azimut" type="number" min="90" max="270" step="0.5" value="180">
+          <button class="btn2" id="bAziSur" type="button" title="Volver al layout norte-sur (azimut 180°)">Sur</button>
+          <button class="btn2" id="bAziPol" type="button" title="Girar las mesas según los lados del polígono construible">Alinear al polígono</button></div>
+        <small class="hint" id="aziTxt"></small></label>
       <label>Filas por mesa (N-S)<input data-p="filas" type="number" min="1" max="8"></label>
       <label>Columnas por mesa (E-O)<input data-p="columnas" type="number" min="1" max="60"></label>
       <div class="full mesa-res" id="mesaRes"></div>
@@ -821,7 +830,7 @@
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...a) => {
   const r = await _fetch(...a);
-  if (r.status === 401) { location.href = "/login"; throw new Error("Sesión vencida"); }
+  if (r.status === 401) { location.href = "login"; throw new Error("Sesión vencida"); }
   return r;
 };
 
@@ -870,7 +879,7 @@ const CTM12 = (() => {
 const fetchOriginal = window.fetch.bind(window);
 window.fetch = async (...a) => {
   const r = await fetchOriginal(...a);
-  if (!r.ok && r.status !== 401 && String(a[0]).startsWith("/api/") && !String(a[0]).startsWith("/api/soporte"))
+  if (!r.ok && r.status !== 401 && String(a[0]).startsWith("api/") && !String(a[0]).startsWith("api/soporte"))
     r.clone().json().then(j => soporte.ultimoError = { ruta: String(a[0]).split("?")[0], error: j.error || r.statusText, hora: new Date().toLocaleTimeString("es-CO") }).catch(() => {});
   return r;
 };
@@ -880,7 +889,7 @@ const soporte = {
   dlg: () => document.getElementById("dlgSoporte"),
   async contar() {
     try {
-      const j = await (await fetch("/api/soporte/resumen")).json(), n = j.sin_leer + j.abiertos + (j.comentarios || 0), b = document.getElementById("spBadge");
+      const j = await (await fetch("api/soporte/resumen")).json(), n = j.sin_leer + j.abiertos + (j.comentarios || 0), b = document.getElementById("spBadge");
       b.hidden = !n; b.textContent = n;
       b.title = [j.sin_leer ? `${j.sin_leer} respuesta(s) sin leer` : "", j.abiertos ? `${j.abiertos} ticket(s) por atender` : "",
         j.comentarios ? `${j.comentarios} comentario(s) nuevos de usuarios` : ""].filter(Boolean).join(" · ");
@@ -928,7 +937,7 @@ const soporte = {
     const msg = document.getElementById("spMsg"), btn = document.getElementById("spEnviar");
     btn.disabled = true; msg.textContent = "Enviando…";
     try {
-      const r = await fetch("/api/soporte/crear", { method: "POST", headers: { "Content-Type": "application/json" },
+      const r = await fetch("api/soporte/crear", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tipo: this.tipo, titulo: document.getElementById("spTitulo").value, descripcion: document.getElementById("spDesc").value,
           contexto: this.contexto(), imagenes: this.imagenes }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error);
@@ -942,7 +951,7 @@ const soporte = {
     caja.innerHTML = `<p class="hint">Cargando…</p>`;
     try {
       const q = todos ? `?todos=1&estado=${document.getElementById("spFiltro").value}` : "?vistos=1";
-      const r = await fetch("/api/soporte" + q), j = await r.json(); if (!r.ok) throw new Error(j.error);
+      const r = await fetch("api/soporte" + q), j = await r.json(); if (!r.ok) throw new Error(j.error);
       if (todos) document.getElementById("spCuenta").textContent = `${j.tickets.length} ticket(s)`;
       caja.innerHTML = j.tickets.length ? j.tickets.map(t => this.tarjeta(t, todos, j.estados)).join("")
         : `<p class="hint">${todos ? "No hay tickets con ese filtro." : "Aún no has dejado tickets. Usa «Nuevo ticket» para reportar un error o proponer una mejora."}</p>`;
@@ -956,8 +965,8 @@ const soporte = {
       <div class="kv">${esc(t.creado.slice(0, 16))}${adm ? ` · ${esc(t.nombre)} (${esc(t.correo)})` : ""}</div>
       <p>${esc(t.descripcion)}</p>
       ${t.adjuntos.length ? `<div class="sp-minis">${t.adjuntos.map(a => a.imagen
-        ? `<a class="sp-mini" href="/api/soporte/adjunto?id=${a.id}" target="_blank" rel="noopener"><img src="/api/soporte/adjunto?id=${a.id}" alt="${esc(a.nombre)}" loading="lazy"></a>`
-        : `<a class="sp-mini sp-arch" href="/api/soporte/adjunto?id=${a.id}" title="Descargar ${esc(a.nombre)}"><span>📎 ${esc(a.nombre)}</span></a>`).join("")}</div>` : ""}
+        ? `<a class="sp-mini" href="api/soporte/adjunto?id=${a.id}" target="_blank" rel="noopener"><img src="api/soporte/adjunto?id=${a.id}" alt="${esc(a.nombre)}" loading="lazy"></a>`
+        : `<a class="sp-mini sp-arch" href="api/soporte/adjunto?id=${a.id}" title="Descargar ${esc(a.nombre)}"><span>📎 ${esc(a.nombre)}</span></a>`).join("")}</div>` : ""}
       ${adm && ctx ? `<div class="sp-ctx">${ctx}</div>` : ""}
       ${(t.mensajes || []).map(m => `<div class="sp-resp${m.rol === "usuario" ? " sp-usr" : ""}"><b>${esc(m.rol === "usuario" ? m.nombre : m.rol === "admin" ? `${m.nombre} · administrador` : "Soporte")} · ${esc(m.creado.slice(0, 16))}</b>${esc(m.texto)}</div>`).join("")}
       ${adm ? `<div class="sp-adm"><select data-sp-estado title="Resuelto o Descartado cierran la conversación">${Object.entries(estados).map(([k, v]) => `<option value="${k}"${k === t.estado ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>
@@ -991,7 +1000,7 @@ document.getElementById("dlgSoporte").addEventListener("click", async e => {
     const caja = t.closest(".sp-adm");
     t.disabled = true;
     try {
-      const r = await fetch("/api/soporte/responder", { method: "POST", headers: { "Content-Type": "application/json" },
+      const r = await fetch("api/soporte/responder", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: +t.dataset.spResponder, estado: caja.querySelector("[data-sp-estado]").value, respuesta: caja.querySelector("[data-sp-resp]").value }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error);
       soporte.listar(true); soporte.contar();
@@ -1001,7 +1010,7 @@ document.getElementById("dlgSoporte").addEventListener("click", async e => {
     const texto = t.closest(".sp-adm").querySelector("[data-sp-texto]").value;
     t.disabled = true;
     try {
-      const r = await fetch("/api/soporte/comentar", { method: "POST", headers: { "Content-Type": "application/json" },
+      const r = await fetch("api/soporte/comentar", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: +t.dataset.spComentar, texto }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error);
       soporte.listar(false);
@@ -1182,14 +1191,14 @@ const leads = {
     c.title = l && l.carpeta ? "Los informes se copian en " + l.carpeta : "Evaluación ligada a este lead";
   },
   async cargar() {
-    const j = await (await fetch("/api/leads")).json();
+    const j = await (await fetch("api/leads")).json();
     this.lista = j.leads; this.pipeline = j.pipeline; this.estados = j.estados;
     document.getElementById("ldPipe").innerHTML = j.pipeline.disponible
       ? `Carpeta <b>Desarrollo GD</b> encontrada. El próximo proyecto será <b>${esc(j.pipeline.siguiente)}</b> y se crea en <code>01 Pipeline\\E1</code> al pasar el lead a E1.`
       : `<span style="color:var(--warn)">No se encontró la carpeta «Desarrollo GD» sincronizada en el equipo que corre el Evaluador.</span> Los leads se pueden registrar y evaluar; para crear carpetas de proyecto hay que configurar su ruta.`;
     document.getElementById("ldEstado").innerHTML = `<option value="">Todos</option>` + Object.entries(j.estados).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
     document.getElementById("ldCanal").innerHTML = `<option value="">Sin registrar</option>` + j.canales.map(c => `<option>${esc(c)}</option>`).join("");
-    if (!this.usuarios) this.usuarios = await fetch("/api/usuarios").then(r => r.ok ? r.json() : []).catch(() => []);
+    if (!this.usuarios) this.usuarios = await fetch("api/usuarios").then(r => r.ok ? r.json() : []).catch(() => []);
     document.getElementById("ldResponsable").innerHTML = `<option value="">Sin asignar</option>` +
       this.usuarios.map(x => `<option value="${esc(x.correo)}">${esc(x.nombre || x.correo)}</option>`).join("");
     this.pintar(); this.marcar();
@@ -1218,7 +1227,7 @@ const leads = {
     // captura del layout para el cuerpo del correo, si la evaluación abierta es la de este lead
     let layout = null;
     if (estado.leadId === l.id && estado.resultado) { try { layout = await imagenLayout(1200, 800); } catch (e) { /* sin captura */ } }
-    const j = await this.post("/api/leads/notificar", { id: l.id, motivo, evaluacion: this.resumenEval(l), layout });
+    const j = await this.post("api/leads/notificar", { id: l.id, motivo, evaluacion: this.resumenEval(l), layout });
     return j.enviado ? `Correo enviado a ${j.para.join(", ")}.` : `No se envió el correo (${j.motivo || "sin destinatarios"}).`;
   },
   async abrir() { this.pestana("ldLista"); this.dlg().showModal(); await this.cargar(); },
@@ -1283,14 +1292,14 @@ const leads = {
     const c = v("ldCoord") ? leerCoordenada(v("ldCoord")) : null;
     if (v("ldCoord") && !c) { msg.textContent = "No reconozco esa coordenada."; return; }
     try {
-      const j = await this.post("/api/leads/guardar", { id: this.editando, lead: { nombre: v("ldNombre"), propietario: v("ldPropietario"), contacto: v("ldContacto"),
+      const j = await this.post("api/leads/guardar", { id: this.editando, lead: { nombre: v("ldNombre"), propietario: v("ldPropietario"), contacto: v("ldContacto"),
         municipio: v("ldMunicipio"), depto: v("ldDepto"), vereda: v("ldVereda"), area_ha: v("ldArea"), numero_predial: v("ldPredial"),
         matricula: v("ldMatricula"), lon: c ? c[0] : null, lat: c ? c[1] : null, canal: v("ldCanal"), notas: v("ldNotas"),
         responsable: v("ldResponsable") } });
       if (this.vincular) {  // la evaluación abierta pasa a ser la de este lead
         this.vincular = false; estado.leadId = j.lead.id;
         if (estado.evalId && estado.evalEditable) {
-          await this.post("/api/evaluaciones/guardar", { id: estado.evalId, nombre: estado.evalNombre, datos: datosEvaluacion(), resumen: resumenEvaluacion(), lead_id: j.lead.id });
+          await this.post("api/evaluaciones/guardar", { id: estado.evalId, nombre: estado.evalNombre, datos: datosEvaluacion(), resumen: resumenEvaluacion(), lead_id: j.lead.id });
           estado.sucio = false;
         } else { estado.sucio = true; }  // sin guardar o de otra persona: queda ligada al guardarla
         marcarNombre();
@@ -1301,10 +1310,10 @@ const leads = {
   },
   async evaluar(l) {
     if (estado.leadId !== l.id && estado.sucio && estado.resultado && !confirm("La evaluación actual tiene cambios sin guardar. ¿Cambiar de lead de todas formas?")) return;
-    const previas = await (await fetch("/api/evaluaciones?lead=" + l.id)).json();
+    const previas = await (await fetch("api/evaluaciones?lead=" + l.id)).json();
     this.dlg().close();
     if (previas.length) {  // retoma la evaluación más reciente del lead
-      abrirEvaluacion(await (await fetch("/api/evaluaciones/una?id=" + previas[0].id)).json());
+      abrirEvaluacion(await (await fetch("api/evaluaciones/una?id=" + previas[0].id)).json());
     } else {
       limpiarEvaluacion(true);
       estado.leadId = l.id; estado.nombre = l.nombre;
@@ -1320,15 +1329,15 @@ const leads = {
     const hechos = [], fallas = [];
     const paso = async (nombre, tarea) => { msg.textContent = `Guardando ${nombre}…`; try { await tarea(); hechos.push(nombre); } catch (e) { fallas.push(`${nombre}: ${e.message}`); } };
     const kml64 = btoa(unescape(encodeURIComponent(kmlLayout())));
-    await paso("KML", async () => this.post("/api/leads/entregable", { id: l.id, tipo: "kml", b64: kml64 }));
-    await paso("KMZ", async () => this.post("/api/leads/entregable", { id: l.id, tipo: "kmz", b64: kml64 }));
+    await paso("KML", async () => this.post("api/leads/entregable", { id: l.id, tipo: "kml", b64: kml64 }));
+    await paso("KMZ", async () => this.post("api/leads/entregable", { id: l.id, tipo: "kmz", b64: kml64 }));
     await paso("ficha técnica", () => informeFicha({ soloCarpeta: true }));
     await paso("reporte predial", () => informePredial({ soloCarpeta: true }));
     await paso("plano del layout (DXF)", () => informePlano({ soloCarpeta: true }));
     await paso("cotizador ajustado", () => informeCotizador({ soloCarpeta: true }));
     await paso("modelo financiero", () => informeFinanciero({ soloCarpeta: true }));
     await paso("oferta económica (PowerPoint)", () => informeOferta({ soloCarpeta: true }));
-    await paso("datos para el CRM", () => postInforme("/api/informe/crm", { ...baseInforme({ soloCarpeta: true }),
+    await paso("datos para el CRM", () => postInforme("api/informe/crm", { ...baseInforme({ soloCarpeta: true }),
       poligonos: estado.capas.filter(x => x.rol === "construible" && x.tipo === "Polygon").map(x => x.coords) }, "Datos CRM.xlsx"));
     if (LG.ctl && LG.ctl.ok) await paso("estudio de títulos", () => informeTitulos({ soloCarpeta: true }));
     await this.cargar();
@@ -1362,11 +1371,11 @@ document.getElementById("dlgLeads").addEventListener("click", async e => {
     if (b.dataset.ldAcc === "evaluar") await leads.evaluar(l);
     else if (b.dataset.ldAcc === "editar") leads.formulario(l);
     else if (b.dataset.ldAcc === "exportar") await leads.exportar(l, msg);
-    else if (b.dataset.ldAcc === "borrar") { if (confirm(`¿Borrar el lead «${l.nombre}»?`)) { await leads.post("/api/leads/borrar", { id: l.id }); await leads.cargar(); } }
+    else if (b.dataset.ldAcc === "borrar") { if (confirm(`¿Borrar el lead «${l.nombre}»?`)) { await leads.post("api/leads/borrar", { id: l.id }); await leads.cargar(); } }
     else if (b.dataset.ldAcc === "e1") {
       const nombre = prompt(`Se creará la carpeta del proyecto ${leads.pipeline.siguiente} en 01 Pipeline\\E1 de SharePoint, con sus 10 subcarpetas.\n\nNombre corto del proyecto (va en el nombre de la carpeta):`, l.nombre.slice(0, 40));
       if (nombre == null) return;
-      const j = await leads.post("/api/leads/crear_proyecto", { id: l.id, nombre });
+      const j = await leads.post("api/leads/crear_proyecto", { id: l.id, nombre });
       await leads.cargar();
       if (estado.leadId === l.id && estado.resultado) {
         // con la evaluación del lead abierta se exportan los entregables y el correo sale con la lista completa
@@ -1382,17 +1391,18 @@ document.getElementById("dlgLeads").addEventListener("click", async e => {
 document.getElementById("dlgLeads").addEventListener("change", async e => {
   const s = e.target.closest("[data-ld-estado]"); if (!s) return;
   const caja = s.closest("[data-lead]");
-  try { await leads.post("/api/leads/estado", { id: +caja.dataset.lead, estado: s.value }); await leads.cargar(); }
+  try { await leads.post("api/leads/estado", { id: +caja.dataset.lead, estado: s.value }); await leads.cargar(); }
   catch (err) { caja.querySelector("[data-ld-msg]").textContent = err.message; }
 });
 
 // ---------- usuario activo ----------
-fetch("/api/auth/yo").then(r => r.json()).then(u => {
+fetch("api/auth/yo").then(r => r.json()).then(u => {
   const ini = (u.nombre || u.correo || "?").split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
   document.getElementById("usrAv").textContent = ini;
   document.getElementById("usrNom").textContent = (u.nombre || u.correo).split(" ")[0];
   document.getElementById("usrInfo").innerHTML = `<b>${esc(u.nombre)}</b>${esc(u.correo)}<br>${u.rol === "admin" ? "Administrador" : "Usuario"}${u.rol !== "admin" && u.alcance === "propios" ? " · ve solo sus leads y proyectos" : ""}
-    · sesión hasta ${esc((u.sesion_expira || "").slice(11, 16))}`;
+    ${u.portal ? "· ingreso por el sitio común" : `· sesión hasta ${esc((u.sesion_expira || "").slice(11, 16))}`}`;
+  if (u.portal) { PORTAL = true; document.getElementById("lnkInicio").hidden = false; }
   const lnkAdmin = document.getElementById("lnkAdmin");
   lnkAdmin.hidden = u.rol !== "admin" && !(u.permisos || []).includes("fuentes_ver");
   if (u.rol !== "admin") lnkAdmin.textContent = "Bases de datos y geoportales";  // permiso dado por el administrador (#51)
@@ -1403,7 +1413,12 @@ fetch("/api/auth/yo").then(r => r.json()).then(u => {
 }).catch(() => {});
 document.getElementById("usrBtn").onclick = e => { e.stopPropagation(); const m = document.getElementById("usrMenu"); m.hidden = !m.hidden; };
 document.addEventListener("click", () => document.getElementById("usrMenu").hidden = true);
-document.getElementById("lnkSalir").onclick = async e => { e.preventDefault(); await fetch("/api/auth/salir", { method: "POST" }); location.href = "/login"; };
+let PORTAL = false;  // abierto desde el sitio común (Worker de la Ruta): la sesión es la de ese sitio
+document.getElementById("lnkSalir").onclick = async e => {
+  e.preventDefault();
+  if (PORTAL) { await fetch("../api/auth/logout", { method: "POST" }).catch(() => {}); location.href = "../"; return; }
+  await fetch("api/auth/salir", { method: "POST" }); location.href = "login";
+};
 
 const ROLES = {
   construible: { t: "Construible", c: "var(--build)", hex: "#16a36b" },
@@ -1495,7 +1510,7 @@ const estilo = c => ({
 const panelGIS = L.control({ position: "topleft" });
 panelGIS.onAdd = () => {
   const d = L.DomUtil.create("div", "panel-gis");
-  d.innerHTML = `<div class="pg-cab"><img class="pg-logo" src="/marca/solcor_positivo.png" alt="Solcor"><b>GIS<i> Solcor</i></b><span id="pgActivas"></span><button id="pgPlegar" title="Recoger el panel de capas" aria-label="Recoger o extender el panel de capas">«</button></div>
+  d.innerHTML = `<div class="pg-cab"><img class="pg-logo" src="marca/solcor_positivo.png" alt="Solcor"><b>GIS<i> Solcor</i></b><span id="pgActivas"></span><button id="pgPlegar" title="Recoger el panel de capas" aria-label="Recoger o extender el panel de capas">«</button></div>
     <div id="pgCuerpo"><div class="hint" style="margin:6px 0">Cargando catálogo…</div></div>`;
   L.DomEvent.disableClickPropagation(d); L.DomEvent.disableScrollPropagation(d);
   return d;
@@ -1522,7 +1537,7 @@ ctrlCapas.addOverlay(gPipeline, "Pipeline");
 const clavePipe = p => p.tipo === "evaluacion" ? "evaluacion" : p.etapa ? (PIPE_COLOR[p.etapa] ? p.etapa : "E4") : p.estado === "e1" ? "E1" : p.estado;
 async function pintarPipeline() {
   gPipeline.clearLayers();
-  const pts = await fetch("/api/pipeline/puntos").then(r => r.ok ? r.json() : []).catch(() => []);
+  const pts = await fetch("api/pipeline/puntos").then(r => r.ok ? r.json() : []).catch(() => []);
   const usados = new Set();
   pts.forEach(p => {
     const k = clavePipe(p), [color, txt] = PIPE_COLOR[k] || PIPE_COLOR.nuevo; usados.add(k);
@@ -1537,7 +1552,7 @@ async function pintarPipeline() {
     caja.querySelector("[data-pp-abrir]").onclick = async () => {
       map.closePopup();
       if (estado.sucio && estado.resultado && !confirm("La evaluación actual tiene cambios sin guardar. ¿Abrir otra de todas formas?")) return;
-      if (p.tipo === "evaluacion") abrirEvaluacion(await (await fetch("/api/evaluaciones/una?id=" + p.id)).json());
+      if (p.tipo === "evaluacion") abrirEvaluacion(await (await fetch("api/evaluaciones/una?id=" + p.id)).json());
       else { if (!leads.lista.length) await leads.cargar(); const l = leads.lista.find(x => x.id === p.id); if (l) await leads.evaluar(l); }
     };
     L.marker([p.lat, p.lon], { icon: icono, zIndexOffset: 1200, title: `${p.proyecto ? p.proyecto + " · " : ""}${p.nombre} (${txt})` })
@@ -1630,8 +1645,8 @@ async function refrescarCapa(c) {
   c.cargando = true; pintarPanel();
   try {
     const bb = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(v => v.toFixed(5)).join(",");
-    const url = c.meta.fuente === "catastro" ? `/api/catastro/features?capa=${c.meta.id}&bbox=${bb}`
-      : c.meta.fuente === "hidro" ? `/api/hidro/features?capa=${c.meta.id}&bbox=${bb}` : `/api/gis/features?ds=${c.meta.id}&bbox=${bb}`;
+    const url = c.meta.fuente === "catastro" ? `api/catastro/features?capa=${c.meta.id}&bbox=${bb}`
+      : c.meta.fuente === "hidro" ? `api/hidro/features?capa=${c.meta.id}&bbox=${bb}` : `api/gis/features?ds=${c.meta.id}&bbox=${bb}`;
     const fc = await (await fetch(url)).json();
     if (my !== c.seq) return;
     c.grupo.clearLayers(); c.truncado = fc.truncado; c.enVista = fc.features.length; c.aviso = fc.aviso || "";
@@ -1723,12 +1738,12 @@ function construirPanel(cat, catCatastro, arbolRed, catHidro) {
     guardarActivas(); pintarPanel();
   });
   // mapa de calor del recurso solar (imagen del raster PVOUT sobre el mapa base)
-  jsonDe("/api/gis/pvout").then(pv => {
+  jsonDe("api/gis/pvout").then(pv => {
     if (!pv || !pv.disponible) return;
     document.getElementById("pgSolarFila").hidden = false;
     const r = pv.rampa, ley = document.getElementById("pgSolarLey");
     ley.innerHTML = `<span class="pg-rampa" style="background:linear-gradient(90deg,${r.map(x => x[1]).join(",")})"></span>${r[0][0]} – ${r[r.length - 1][0]} ${esc(pv.unidad)}`;
-    const capa = L.imageOverlay("/api/gis/pvout.png", pv.bounds, { opacity: 0.6 * opacidad, interactive: false, className: "img-pvout" });
+    const capa = L.imageOverlay("api/gis/pvout.png", pv.bounds, { opacity: 0.6 * opacidad, interactive: false, className: "img-pvout" });
     capaSolar = capa;
     const cb = document.getElementById("pgSolar");
     cb.onchange = () => { cb.checked ? capa.addTo(map) : map.removeLayer(capa); const s = lsGet(); s.solar = cb.checked; lsSet(s); };
@@ -1780,7 +1795,7 @@ function construirPanel(cat, catCatastro, arbolRed, catHidro) {
   pintarPanel();
 }
 const jsonDe = u => fetch(u).then(r => r.json()).catch(() => null);
-Promise.all([jsonDe("/api/gis/catalogo"), jsonDe("/api/catastro/catalogo"), jsonDe("/api/red/arbol"), jsonDe("/api/hidro/catalogo")])
+Promise.all([jsonDe("api/gis/catalogo"), jsonDe("api/catastro/catalogo"), jsonDe("api/red/arbol"), jsonDe("api/hidro/catalogo")])
   .then(([a, b, c, d]) => construirPanel(a || { disponible: false, datasets: [] }, b, c, d))
   .catch(e => { document.getElementById("pgCuerpo").innerHTML = `<div class="nota">Error cargando capas: ${esc(e.message)}</div>`; });
 
@@ -1894,7 +1909,7 @@ async function refrescarRed() {
   RED.cargando = true; estadoRed();
   const b = map.getBounds();
   try {
-    const fc = await (await fetch("/api/red/features", { method: "POST", headers: { "Content-Type": "application/json" },
+    const fc = await (await fetch("api/red/features", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ claves, bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()] }) })).json();
     if (my !== RED.seq) return;
     gRed.clearLayers(); resaltado = null;
@@ -1930,7 +1945,7 @@ async function analizarGIS() {
   estado.gis = null; estado.predios = null; gPredios.clearLayers();
   if (!polys.length) return;
   const post = (u) => fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ poligonos: polys }) }).then(r => r.json());
-  const [g, p] = await Promise.allSettled([post("/api/gis/analizar"), post("/api/catastro/predios")]);
+  const [g, p] = await Promise.allSettled([post("api/gis/analizar"), post("api/catastro/predios")]);
   estado.gis = g.status === "fulfilled" ? g.value : { error: g.reason.message };
   estado.predios = p.status === "fulfilled" ? p.value : null;
   // recurso solar del sitio como producción específica (predios nuevos; las evaluaciones guardadas conservan su valor)
@@ -2062,17 +2077,47 @@ function listaCapas() {
 // ---------- parametros ----------
 function pintarParams() {
   if (estado.params.base_arriendo === "total") estado.params.base_arriendo = "util";  // nombre anterior (antes del 19-oct-2026)
+  if (!isFinite(parseFloat(estado.params.azimut))) estado.params.azimut = 180;  // guardadas antes del #54: norte-sur
   document.querySelectorAll("[data-p]").forEach(el => {
     const v = estado.params[el.dataset.p];
     if (v !== undefined) el.value = (["modulos_objetivo", "max_gd"].includes(el.dataset.p) && !v) ? "" : v;
   });
-  sincronizarModulo(); resumenMesa();
+  sincronizarModulo(); resumenMesa(); pintarAzimut();
 }
+// ---------- orientación del layout (#54) ----------
+function textoAzimut(a) {
+  a = +a; const d = Math.round((a - 180) * 10) / 10;
+  if (!d) return "180° · módulos mirando al sur, filas este-oeste";
+  const rumbo = a < 157.5 ? (a < 112.5 ? "E" : "SE") : a > 202.5 ? (a > 247.5 ? "O" : "SO") : "S";
+  return `${fmt(a, 1)}° · ${fmt(Math.abs(d), 1)}° hacia el ${d < 0 ? "este" : "oeste"} desde el sur (${rumbo}); filas a ${fmt(Math.abs(d), 1)}° de la línea este-oeste`;
+}
+function pintarAzimut() {
+  const a = parseFloat(estado.params.azimut), ok = isFinite(a) ? a : 180;
+  document.getElementById("aziRango").value = ok;
+  document.querySelector('[data-p="azimut"]').value = ok;
+  document.getElementById("aziTxt").textContent = textoAzimut(ok);
+}
+let alinearPoligono = false;
+document.getElementById("aziRango").addEventListener("input", e => {
+  document.querySelector('[data-p="azimut"]').value = e.target.value;
+  document.getElementById("aziTxt").textContent = textoAzimut(e.target.value);
+});
+document.getElementById("aziRango").addEventListener("change", e => {
+  document.querySelector('[data-p="azimut"]').dispatchEvent(new Event("change"));
+});
+document.getElementById("bAziSur").onclick = () => {
+  estado.params.azimut = 180; pintarAzimut(); document.querySelector('[data-p="azimut"]').dispatchEvent(new Event("change"));
+};
+document.getElementById("bAziPol").onclick = () => {
+  if (!estado.capas.length) return alert("Primero carga o dibuja el polígono del predio.");
+  alinearPoligono = true; evaluar();
+};
 function leerParams() {
   document.querySelectorAll("[data-p]").forEach(el => {
     estado.params[el.dataset.p] = esNum(el) ? parseFloat(el.value) : el.value;
   });
   ["modulos_objetivo", "max_gd"].forEach(k => { if (!(estado.params[k] > 0)) estado.params[k] = 0; });
+  if (!isFinite(estado.params.azimut)) estado.params.azimut = 180;
   // ancla del layout recortado: CT o punto de conexión (las mesas se ubican cerca)
   const anc = (EL.lista.find(x => x.tipo === "ct") || EL.lista.find(x => x.tipo === "conexion"));
   estado.params.ancla = anc ? centroEl(anc) : null;
@@ -2106,7 +2151,7 @@ function aplicarModulo(id) {
   pintarParams(); evaluar();
 }
 async function cargarModulos() {
-  try { MODS = await (await fetch("/api/modulos")).json(); } catch (e) { MODS = []; }
+  try { MODS = await (await fetch("api/modulos")).json(); } catch (e) { MODS = []; }
   pintarSelModulo();
 }
 cargarModulos();
@@ -2133,7 +2178,7 @@ function resumenMesa() {
 let fin = null;
 // supuestos por defecto del modelo (vectores PPA, IPC, IBR): completan las evaluaciones guardadas antes de tenerlos
 let FIN_DEF = {};
-fetch("/api/financiero/supuestos").then(r => r.ok ? r.json() : {}).then(d => { FIN_DEF = d || {}; if (fin) { fin = { ...FIN_DEF, ...fin }; pintarFin(); } }).catch(() => {});
+fetch("api/financiero/supuestos").then(r => r.ok ? r.json() : {}).then(d => { FIN_DEF = d || {}; if (fin) { fin = { ...FIN_DEF, ...fin }; pintarFin(); } }).catch(() => {});
 const VEC_PPA = 16;
 const redond = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
 function pintarFin() {
@@ -2181,7 +2226,7 @@ document.querySelectorAll("[data-fpct],[data-ibr]").forEach(el => el.addEventLis
 document.getElementById("bTrm").onclick = async () => {
   const b = document.getElementById("bTrm"); b.disabled = true; b.textContent = "…";
   try {
-    const r = await (await fetch("/api/trm")).json();
+    const r = await (await fetch("api/trm")).json();
     if (r.ok) { document.querySelector('[data-f="trm"]').value = r.trm; b.title = `TRM ${fmt(r.trm, 2)} vigente ${r.desde} · ${r.fuente}`; cambioFin(); }
     else alert(r.motivo);
   } catch (e) { alert("No se pudo consultar la TRM. Escríbela a mano."); }
@@ -2191,6 +2236,7 @@ let tEval;
 document.querySelectorAll("[data-p],[data-f]").forEach(el => el.addEventListener("change", () => {
   leerParams();
   if (["modulo_largo", "modulo_ancho"].includes(el.dataset.p)) { estado.params.modulo_id = ""; sincronizarModulo(); }
+  if (el.dataset.p === "azimut") pintarAzimut();
   resumenMesa(); clearTimeout(tEval); tEval = setTimeout(evaluar, 250);
 }));
 document.getElementById("preset").onchange = e => {
@@ -2205,13 +2251,13 @@ inp.onchange = () => inp.files[0] && cargar(inp.files[0]);
 ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", e => e.dataTransfer.files[0] && cargar(e.dataTransfer.files[0]));
 
-fetch("/api/ejemplos").then(r => r.json()).then(ns => {
+fetch("api/ejemplos").then(r => r.json()).then(ns => {
   if (!ns.length) return;
   const d = document.getElementById("ejemplos");
   d.innerHTML = `<p class="hint">Archivos en la carpeta <b>ejemplos</b>:</p>` + ns.map(n =>
     `<button class="btn2" style="width:100%;margin-top:6px;text-align:left;font-weight:500;font-size:12.5px" data-n="${esc(n)}">📂 ${esc(n)}</button>`).join("");
   d.querySelectorAll("button").forEach(b => b.onclick = async () => {
-    const blob = await (await fetch("/ejemplos/" + encodeURIComponent(b.dataset.n))).blob();
+    const blob = await (await fetch("ejemplos/" + encodeURIComponent(b.dataset.n))).blob();
     cargar(new File([blob], b.dataset.n));
   });
 });
@@ -2219,7 +2265,7 @@ fetch("/api/ejemplos").then(r => r.json()).then(ns => {
 async function cargar(file) {
   drop.innerHTML = `Leyendo <b>${esc(file.name)}</b>…`;
   try {
-    const r = await fetch("/api/cargar", { method: "POST", body: await file.arrayBuffer() });
+    const r = await fetch("api/cargar", { method: "POST", body: await file.arrayBuffer() });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     aplicarCarga(j, file.name);
@@ -2254,15 +2300,17 @@ btnEval.onclick = evaluar;
 let seq = 0;
 async function evaluar() {
   if (!estado.capas.length) return;
-  const my = ++seq;
+  const my = ++seq, alinear = alinearPoligono;
+  alinearPoligono = false;
   btnEval.disabled = true; btnEval.innerHTML = '<span class="spin"></span> Calculando…';
   try {
-    const r = await fetch("/api/evaluar", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ capas: estado.capas.concat(elementosComoCapas()), params: leerParams(), fin: leerFin() }) });
+    const r = await fetch("api/evaluar", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ capas: estado.capas.concat(elementosComoCapas()), params: alinear ? { ...leerParams(), alinear: true } : leerParams(), fin: leerFin() }) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
     if (my !== seq) return;
     estado.resultado = j;
+    if (j.params && isFinite(j.params.azimut)) { estado.params.azimut = j.params.azimut; pintarAzimut(); }
     capexGd();
     // años calendario del vector PPA (dependen del COD)
     const cod = j.financiero && j.financiero[0] ? +j.financiero[0].cod.slice(0, 4) : null;
@@ -2290,6 +2338,12 @@ function pintarResultado(j) {
     + (j.financiero && j.financiero[0] ? ` · TIR SAS ${fmt(100 * j.financiero[0].tir.equity_sas, 1)} %` : "");
   const notas = [];
   if (!j.areas.length) notas.push("No hay ninguna capa marcada como <b>Construible</b>. Asigna ese rol al polígono del predio en la lista de capas.");
+  if (s.azimut_candidatos && s.azimut_candidatos.length)
+    notas.push((s.azimut === 180 ? "Alinear al polígono: ninguna orientación da al menos 2 % más mesas que el sur, así que el layout queda <b>norte-sur (180°)</b>."
+      : `Layout alineado al polígono: azimut <b>${fmt(s.azimut, 1)}°</b>.`)
+      + ` Mesas por orientación probada (hasta ±45° del sur): ${s.azimut_candidatos.map(c => `${fmt(c.azimut, 1)}° → ${fmt(c.mesas)}`).join(" · ")}. Puedes ajustarlo a mano con la barra.`);
+  if (Math.abs((p.azimut ?? 180) - 180) >= 20)
+    notas.push(`Los módulos miran a <b>${fmt(p.azimut, 1)}°</b> (${fmt(Math.abs(p.azimut - 180), 1)}° fuera del sur). El rendimiento (kWh/kWp) que usa la energía supone orientación sur: con inclinaciones bajas la pérdida es pequeña, pero confírmala en PVsyst.`);
   if (!p.tarifa_arriendo_ha_mes) notas.push("Ingresa la <b>tarifa de arriendo</b> (COP/ha/mes) para calcular la oferta al propietario.");
   if (s.limitado_por) notas.unshift(`Layout limitado por <b>${esc(s.limitado_por)}</b>${s.limitado_por === "paneles objetivo" ? ` (${fmt(s.modulos_objetivo)} paneles → ${fmt(s.mesas)} mesas enteras de ${m.modulos})` : ` (${s.max_gd} GD × ${fmt(s.mesas_max_por_gd)} mesas)`}:
     se ubican <b>${fmt(s.modulos)}</b> de <b>${fmt(s.modulos_disponibles)}</b> módulos posibles en el terreno (${fmt(s.mesas)} de ${fmt(s.mesas_disponibles)} mesas),
@@ -2523,7 +2577,7 @@ function infoMesa(i, j) {
     "Módulos": `${m.modulos} (${p.filas} filas N-S × ${p.columnas} columnas E-O)`, "Potencia DC": `${fmt(m.kwp, 2)} kWp`,
     "Módulo": `${p.modulo_nombre || p.nombre || ""} · ${fmt(p.modulo_wp)} Wp`,
     "Dimensiones": `${fmt(m.ancho, 2)} × ${fmt(m.profundidad, 2)} m (proyección en planta)`,
-    "Área ocupada": `${fmt(m.ancho * m.profundidad, 1)} m²`, "Inclinación": `${fmt(p.inclinacion, 1)}° · azimut 180° (sur)` };
+    "Área ocupada": `${fmt(m.ancho * m.profundidad, 1)} m²`, "Inclinación": `${fmt(p.inclinacion, 1)}° · azimut ${textoAzimut(p.azimut ?? 180).split(" · ")[0]}` };
 }
 // Las capas GIS con relleno (catastro, áreas protegidas…) quedan encima del layout y se quedarían con el clic:
 // si el punto cae sobre una mesa, gana la mesa. Devuelve true cuando abrió la ficha de la mesa.
@@ -2583,15 +2637,16 @@ function dibujarLayout(j) {
   const largoProy = ladoNS * Math.cos(p.inclinacion * Math.PI / 180);
   j.mesas.forEach((me, i) => {
     const color = colorMesa(me);
-    const [[x0, y0], , [x1, y1]] = me.coords;
+    // ejes de la mesa: c0→c1 a lo ancho (fila de módulos), c0→c3 en la pendiente; sirve con el layout girado
+    const [[x0, y0], [xa, ya], , [xb, yb]] = me.coords, ux = xa - x0, uy = ya - y0, vx = xb - x0, vy = yb - y0;
+    const pto = (fx, fy) => [y0 + uy * fx + vy * fy, x0 + ux * fx + vx * fy];
     L.polygon(ll(me.coords), { renderer: rendCanvas, color: "#0b3b75", weight: .8, fillColor: color, fillOpacity: .78 })
       .on("click", () => { if (!DIB.modo) seleccionarMesa(i); }).addTo(gMesas);
     for (let r = 0; r < p.filas; r++) {
       const fy0 = (r * (largoProy + p.sep_filas)) / prof, fy1 = fy0 + largoProy / prof;
       for (let c = 0; c < p.columnas; c++) {
         const fx0 = (c * (ladoEO + p.sep_columnas)) / ancho, fx1 = fx0 + ladoEO / ancho;
-        const X0 = x0 + (x1 - x0) * fx0, X1 = x0 + (x1 - x0) * fx1, Y0 = y0 + (y1 - y0) * fy0, Y1 = y0 + (y1 - y0) * fy1;
-        L.polygon([[Y0, X0], [Y0, X1], [Y1, X1], [Y1, X0]], { renderer: rendCanvas, color: "#e2e8f0", weight: .6, fillColor: color, fillOpacity: .9 })
+        L.polygon([pto(fx0, fy0), pto(fx1, fy0), pto(fx1, fy1), pto(fx0, fy1)], { renderer: rendCanvas, color: "#e2e8f0", weight: .6, fillColor: color, fillOpacity: .9 })
           .on("click", ev => {
             if (DIB.modo) return;  // dejar pasar el clic a la herramienta de dibujo/predio
             L.DomEvent.stop(ev);
@@ -2661,7 +2716,7 @@ async function guardarEvaluacion(comoNueva) {
   const nombre = document.getElementById("gNombre").value.trim();
   if (!nombre) { document.getElementById("gMsg").textContent = "Escribe un nombre."; return; }
   try {
-    const r = await fetch("/api/evaluaciones/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("api/evaluaciones/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: comoNueva || !estado.evalEditable ? null : estado.evalId, nombre, datos: datosEvaluacion(), resumen: resumenEvaluacion(), lead_id: estado.leadId || null }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     estado.evalId = j.id; estado.evalNombre = nombre; estado.evalEditable = true; estado.sucio = false; marcarNombre(); dlgG.close();
@@ -2684,7 +2739,7 @@ function pintarListaEval() {
           <br>${e.mia ? "Tuya" : "De " + esc(e.autor || "otro usuario")} · guardada ${esc(e.modificada)}${e.creada !== e.modificada ? ` · creada ${esc(e.creada.slice(0, 10))}` : ""}${e.lead_id ? ` · lead #${e.lead_id}` : ""}</div></div>`; }).join("");
 }
 document.getElementById("btnAbrir").onclick = async () => {
-  listaEval = await (await fetch("/api/evaluaciones")).json();
+  listaEval = await (await fetch("api/evaluaciones")).json();
   document.getElementById("aFiltro").value = ""; pintarListaEval(); dlgA.showModal();
 };
 document.getElementById("aFiltro").oninput = pintarListaEval;
@@ -2693,12 +2748,12 @@ document.getElementById("aLista").onclick = async e => {
   const ab = e.target.closest("[data-abrir]"), bo = e.target.closest("[data-borrar]");
   if (ab) {
     if (estado.sucio && estado.resultado && !confirm("La evaluación actual tiene cambios sin guardar. ¿Abrir otra de todas formas?")) return;
-    const ev = await (await fetch("/api/evaluaciones/una?id=" + ab.dataset.abrir)).json();
+    const ev = await (await fetch("api/evaluaciones/una?id=" + ab.dataset.abrir)).json();
     dlgA.close(); abrirEvaluacion(ev);
   } else if (bo) {
     const ev = listaEval.find(x => x.id === +bo.dataset.borrar);
     if (!confirm(`¿Borrar la evaluación «${ev.nombre}»? No se puede deshacer.`)) return;
-    await fetch("/api/evaluaciones/borrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id }) });
+    await fetch("api/evaluaciones/borrar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id }) });
     if (estado.evalId === ev.id) { estado.evalId = null; estado.evalNombre = null; estado.sucio = true; marcarNombre(); }
     listaEval = listaEval.filter(x => x.id !== ev.id); pintarListaEval();
   }
@@ -2775,7 +2830,7 @@ const gLugar = L.layerGroup().addTo(map);
   async function elegirPredio(l) {
     caja.hidden = true; inp.value = `${l.texto} · ${l.municipio}`; inp.blur();
     if (l.tipo === "vereda") {  // vereda: se dibuja su límite y se encuadra; los predios se ven con la capa de catastro
-      const v = await (await fetch(`/api/catastro/vereda?codigo=${encodeURIComponent(l.codigo)}`)).json();
+      const v = await (await fetch(`api/catastro/vereda?codigo=${encodeURIComponent(l.codigo)}`)).json();
       if (!v.encontrado) { alert(v.motivo); return; }
       gLugar.clearLayers();
       L.polygon(v.anillos.map(a => a.map(([x, y]) => [y, x])), { color: "#e879f9", weight: 3, fill: false, dashArray: "8 6", interactive: false }).addTo(gLugar);
@@ -2785,7 +2840,7 @@ const gLugar = L.layerGroup().addTo(map);
         .bindTooltip(`Vereda ${esc(v.nombre)} · ${esc(v.municipio)}`, { permanent: true, direction: "center", className: "lugar-lbl" }).addTo(gLugar);
       return;
     }
-    const r = await (await fetch(`/api/catastro/ficha?codigo=${encodeURIComponent(l.codigo)}`)).json();
+    const r = await (await fetch(`api/catastro/ficha?codigo=${encodeURIComponent(l.codigo)}`)).json();
     if (!r.encontrado) { alert(r.motivo || "No se encontró el predio en el catastro IGAC."); return; }
     gLugar.clearLayers();
     const pol = L.polygon(r.coords.map(([x, y]) => [y, x]), { color: "#fbbf24", weight: 3, fillOpacity: 0.12, dashArray: "8 6" }).addTo(gLugar);
@@ -2803,7 +2858,7 @@ const gLugar = L.layerGroup().addTo(map);
     const [x0, y0, x1, y1] = l.bbox;
     map.fitBounds([[y0, x0], [y1, x1]], { padding: [30, 30] });
     gLugar.clearLayers();
-    const g = await (await fetch(`/api/lugares/geom?codigo=${encodeURIComponent(l.codigo)}`)).json();
+    const g = await (await fetch(`api/lugares/geom?codigo=${encodeURIComponent(l.codigo)}`)).json();
     if (g.type) L.geoJSON(g, { style: { color: "#fbbf24", weight: 3, fill: false, dashArray: "8 6" }, interactive: false })
       .addTo(gLugar);
     L.marker([(y0 + y1) / 2, (x0 + x1) / 2], { opacity: 0, interactive: false })
@@ -2816,8 +2871,8 @@ const gLugar = L.layerGroup().addTo(map);
     t = setTimeout(async () => {
       const my = ++seqB, q = inp.value.trim();
       // municipios y, desde 3 letras, predios del catastro IGAC por nombre o dirección (o número predial)
-      const [lug, pre] = await Promise.all([fetch("/api/lugares?q=" + encodeURIComponent(q)).then(r => r.json()),
-        q.length >= 3 ? fetch("/api/catastro/buscar?q=" + encodeURIComponent(q)).then(r => r.json()).catch(() => ({ resultados: [] })) : { resultados: [] }]);
+      const [lug, pre] = await Promise.all([fetch("api/lugares?q=" + encodeURIComponent(q)).then(r => r.json()),
+        q.length >= 3 ? fetch("api/catastro/buscar?q=" + encodeURIComponent(q)).then(r => r.json()).catch(() => ({ resultados: [] })) : { resultados: [] }]);
       if (my !== seqB) return;
       items = [...lug.slice(0, 6), ...(pre.resultados || []).map(p => ({ ...p, predio: true }))];
       notaPredios = pre.indexando != null ? `Preparando la búsqueda de predios por nombre (${Math.round(pre.indexando * 100)} %)…` : (items.length ? "" : pre.aviso || "");
@@ -3052,7 +3107,7 @@ map.on("click", async e => {
   if (DIB.modo === "poligono") { DIB.vertices.push(imanMedida(e.latlng)); pintarDibujo(); }
   else if (DIB.modo === "predio") {
     const msg = document.getElementById("dibujoMsg"); msg.textContent = "Buscando el predio…";
-    const r = await (await fetch(`/api/catastro/punto?lon=${e.latlng.lng}&lat=${e.latlng.lat}`)).json();
+    const r = await (await fetch(`api/catastro/punto?lon=${e.latlng.lng}&lat=${e.latlng.lat}`)).json();
     if (!r.encontrado) { msg.innerHTML = `<span style="color:var(--excl)">${esc(r.motivo || "No hay predio del catastro IGAC en ese punto. Acércate y toca dentro del predio, o dibuja el polígono a mano.")}</span>`; return; }
     agregarPredioCatastral(r);
   }
@@ -3073,7 +3128,7 @@ map.on("dblclick", e => { if (DIB.modo === "poligono") { L.DomEvent.stop(e); DIB
 document.getElementById("bEvaluarDibujo").onclick = async () => {
   const b = document.getElementById("bEvaluarDibujo"); b.disabled = true;
   try {
-    const r = await fetch("/api/capas_dibujadas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ poligonos: DIB.poligonos }) });
+    const r = await fetch("api/capas_dibujadas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ poligonos: DIB.poligonos }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     const nombre = DIB.poligonos.find(p => p.origen && p.origen.startsWith("Catastro")) ? "Predio catastral" : "Polígono dibujado";
     aplicarCarga(j, nombre);
@@ -3318,7 +3373,7 @@ async function buscarRed(el) {
   el.red = "buscando";
   pintarListaEl();
   try {
-    el.red = await (await fetch(`/api/red/cercano?lon=${el.centro[0]}&lat=${el.centro[1]}`)).json();
+    el.red = await (await fetch(`api/red/cercano?lon=${el.centro[0]}&lat=${el.centro[1]}`)).json();
     // red del OR dibujada a mano (estimada): punto más cercano sobre cada línea
     const [px, py] = aM(el.centro);
     EL.lista.filter(x => x.tipo === "red_or" && x.coords && x.coords.length > 1).forEach(x => {
@@ -3766,7 +3821,7 @@ zonaArrastre("dropFicha", "archivoFicha", async f => {
   d.innerHTML = `Leyendo <b>${esc(f.name)}</b>…`;
   try {
     fichaPdf = await f.arrayBuffer(); fichaNombre = f.name;
-    const r = await fetch("/api/modulos/ficha", { method: "POST", headers: { "X-Nombre": encodeURIComponent(f.name) }, body: fichaPdf });
+    const r = await fetch("api/modulos/ficha", { method: "POST", headers: { "X-Nombre": encodeURIComponent(f.name) }, body: fichaPdf });
     const x = await r.json(); if (!r.ok) throw new Error(x.error);
     const set = (id, v) => document.getElementById(id).value = v == null ? "" : v;
     set("fFab", x.fabricante); set("fMod", x.modelo); set("fWp", x.wp); set("fLargo", x.largo); set("fAncho", x.ancho);
@@ -3786,7 +3841,7 @@ document.getElementById("fGuardarMod").onclick = async () => {
     peso_kg: v("fPeso"), eficiencia: v("fEf"), celdas: v("fCel"), bifacial: document.getElementById("fBif").checked };
   const b = document.getElementById("fGuardarMod"); b.disabled = true;
   try {
-    const r = await fetch("/api/modulos/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
+    const r = await fetch("api/modulos/guardar", { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modulo, pdf_b64: fichaPdf ? aBase64(fichaPdf) : null, archivo: fichaNombre }) });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     MODS = j.catalogo; pintarSelModulo(); dlgF.close();
@@ -3887,7 +3942,7 @@ zonaArrastre("dropCtl", "archivoCtl", async f => {
   d.innerHTML = `Leyendo <b>${esc(f.name)}</b> y ubicando el predio…`;
   try {
     const q = new URLSearchParams({ nombre: document.getElementById("lgNombre").value, cedula: document.getElementById("lgCedula").value });
-    const r = await fetch("/api/ctl/leer?" + q, { method: "POST", body: await f.arrayBuffer() });
+    const r = await fetch("api/ctl/leer?" + q, { method: "POST", body: await f.arrayBuffer() });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
     j.archivo = f.name; LG.ctl = j;
     if (j.ok) {
@@ -4007,7 +4062,7 @@ const informeTitulos = async (op = {}) => {
     etiqueta([cx, cy], `${LG.ctl.matricula} · ${g.numero_predial}`);
   }) : null;
   const l = estadoLegal();
-  return descargar(await fetch("/api/informe/titulos", { method: "POST", headers: { "Content-Type": "application/json" },
+  return descargar(await fetch("api/informe/titulos", { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ctl: LG.ctl, georef: g, mapa, elaboro: l.elaboro, aprobo: l.aprobo, propietario: propietario(), ...destinoLead(op) }) }), "Estudio de titulos.docx");
 };
 const informePredial = async (op = {}) => {
@@ -4024,7 +4079,7 @@ const informePredial = async (op = {}) => {
     lectura: lectura(), mapas: { catastral, layout }, elaboro: l.elaboro, aprobo: l.aprobo, ...destinoLead(op),
     origen_geometria: estado.capas.some(x => /Catastro IGAC/.test(x.carpeta || "")) ? "el lindero del catastro IGAC" : `el polígono de ${estado.nombre || "la evaluación"}`,
   };
-  return descargar(await fetch("/api/informe/predial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }),
+  return descargar(await fetch("api/informe/predial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }),
     "Reporte caracterizacion predial.docx");
 };
 const informeFicha = async (op = {}) => {
@@ -4038,7 +4093,7 @@ const informeFicha = async (op = {}) => {
     financiero: (j.financiero || []).map(f => ({ capex: f.capex, tir: f.tir, anio1: f.anio1, dscr_min: f.dscr_min })),
     mapa: await imagenLayout(), elaboro: l.elaboro, aprobo: l.aprobo, ...destinoLead(op),
   };
-  return descargar(await fetch("/api/informe/ficha", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }),
+  return descargar(await fetch("api/informe/ficha", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo) }),
     "Ficha tecnica.docx");
 };
 // Informes ligados a un lead que ya es proyecto: además de descargarse, quedan en su carpeta del pipeline.
@@ -4146,7 +4201,7 @@ const baseInforme = op => {
   const j = estado.resultado;
   return { proyecto: estadoLegal().proyecto || estado.evalNombre || estado.nombre, resultado: { resumen: j.resumen, params: j.params, mesa: j.mesa, gds: j.gds }, ...destinoLead(op) };
 };
-const informeCotizador = (op = {}) => postInforme("/api/informe/cotizador", { ...baseInforme(op),
+const informeCotizador = (op = {}) => postInforme("api/informe/cotizador", { ...baseInforme(op),
   poligonos: estado.capas.filter(x => x.rol === "construible" && x.tipo === "Polygon").map(x => x.coords),
   long_mt_m: EL.lista.filter(el => el.tipo === "mt" && el.coords).reduce((s, el) => s + largoM(el.coords), 0) }, "Cotizador.xlsx");
 // modelo financiero Solcor: un libro por GD (el modelo es de un GD), con municipio, departamento y arriendo o compra
@@ -4156,12 +4211,12 @@ const informeFinanciero = async (op = {}) => {
     municipio: g.municipio ? g.municipio.nombre : (l && l.municipio) || "", depto: g.municipio ? g.municipio.depto : (l && l.depto) || "" };
   let r;
   for (let gd = 0; gd < Math.max(1, fin.length); gd++) {
-    r = await postInforme("/api/informe/financiero", { ...base, gd }, `Modelo financiero${fin.length > 1 ? ` GD ${gd + 1}` : ""}.xlsx`);
+    r = await postInforme("api/informe/financiero", { ...base, gd }, `Modelo financiero${fin.length > 1 ? ` GD ${gd + 1}` : ""}.xlsx`);
     if (gd < fin.length - 1) await new Promise(ok => setTimeout(ok, 700));  // deja respirar al navegador entre descargas
   }
   return r;
 };
-const informePlano = (op = {}) => postInforme("/api/informe/plano", { ...baseInforme(op),
+const informePlano = (op = {}) => postInforme("api/informe/plano", { ...baseInforme(op),
   capas: estado.capas.filter(c => c.coords && c.coords.length > 1).map(c => ({ nombre: c.nombre, rol: c.rol, tipo: c.tipo, coords: c.coords })),
   mesas: estado.resultado.mesas.map(m => ({ coords: m.coords, gd: m.gd || 0 })),
   elementos: EL.lista.map(el => {
@@ -4171,7 +4226,7 @@ const informePlano = (op = {}) => postInforme("/api/informe/plano", { ...baseInf
   }) }, "Plano layout.dxf");
 const informeOferta = async (op = {}) => {
   const g = estado.gis || {}, c = LG.ctl && LG.ctl.ok ? LG.ctl : null, l = leads.activo(), v = id => document.getElementById(id).value;
-  return postInforme("/api/informe/oferta", { ...baseInforme(op), propietario: propietario().nombre || (l && l.propietario) || "",
+  return postInforme("api/informe/oferta", { ...baseInforme(op), propietario: propietario().nombre || (l && l.propietario) || "",
     municipio: g.municipio ? g.municipio.nombre : (l && l.municipio) || "", depto: g.municipio ? g.municipio.depto : (l && l.depto) || "",
     vereda: (c && c.vereda) || (l && l.vereda) || "",
     oferta: { prima: v("ofPrima"), meses_desarrollo: v("ofDes"), meses_construccion: v("ofCon"), ipc_pct: v("ofIpc") },

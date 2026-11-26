@@ -19,6 +19,8 @@ import os
 import sqlite3
 import zlib
 
+import bd
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 DATOS = os.path.join(BASE, "..", "datos")
 FUENTES = [
@@ -34,7 +36,14 @@ FUENTES = [
 FUENTE = FUENTES[0][1]
 
 
+# esquema de cada base en Postgres cuando el Evaluador corre en la nube (herramientas/migrar_a_nube.py)
+ESQUEMAS = {FUENTES[0][0]: "ev_cat_acc", FUENTES[1][0]: "ev_cat_antioquia", FUENTES[2][0]: "ev_cat_amco",
+            FUENTES[3][0]: "ev_cat_armenia"}
+
+
 def _bases():
+    if bd.NUBE:
+        return [f for f in FUENTES if bd.esquema_disponible(ESQUEMAS[f[0]], "predios")]
     return [f for f in FUENTES if os.path.isfile(f[0])]
 
 
@@ -43,7 +52,7 @@ def disponible():
 
 
 def _db(ruta):
-    return sqlite3.connect(f"file:{ruta}?mode=ro", uri=True, timeout=30)
+    return bd.conectar(ESQUEMAS.get(ruta, ""), f"file:{ruta}?mode=ro", uri=True, timeout=30)
 
 
 def _consultar(fn, vacio):
